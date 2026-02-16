@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Templates - Coffee Tracker{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Brew Templates</h1>
+    <a href="/templates/new" class="btn btn-primary">+ New Template</a>
+</div>
+
+{% if templates_list %}
+<div class="template-grid">
+    {% for tpl in templates_list %}
+    <div class="template-card">
+        <h3>{{ tpl.name }}</h3>
+        <div class="meta">
+            {% if tpl.roaster %}{{ tpl.roaster }}{% endif %}
+            {% if tpl.bean_name %} — {{ tpl.bean_name }}{% endif %}
+            {% if tpl.brew_method %}<br>{{ tpl.brew_method }}{% endif %}
+            {% if tpl.brew_device %} ({{ tpl.brew_device }}){% endif %}
+        </div>
+        {% if tpl.bean_amount_grams or tpl.water_amount_ml %}
+        <div class="meta">
+            {% if tpl.bean_amount_grams %}{{ tpl.bean_amount_grams }}g{% endif %}
+            {% if tpl.water_amount_ml %} / {{ tpl.water_amount_ml }}ml{% endif %}
+            {% if tpl.grind_setting %} | Grind: {{ tpl.grind_setting }}{% endif %}
+        </div>
+        {% endif %}
+        <div class="actions">
+            <a href="/brews/new" class="btn btn-primary btn-sm">Use</a>
+            <a href="/templates/{{ tpl.id }}/edit" class="btn btn-outline btn-sm">Edit</a>
+            <a href="/templates/{{ tpl.id }}/delete" class="btn btn-danger btn-sm"
+               onclick="return confirm('Delete this template?')">Delete</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <p style="color: var(--text-muted); text-align: center; padding: 2rem 0;">
+        No templates yet. Create one to save your favorite brew recipes!
+    </p>
+</div>
+{% endif %}
+{% endblock %}

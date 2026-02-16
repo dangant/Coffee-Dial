@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Analytics - Coffee Tracker{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Analytics</h1>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="value">{{ summary.total_brews }}</div>
+        <div class="label">Total Brews</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ summary.average_score or "—" }}</div>
+        <div class="label">Avg Score</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ summary.top_roaster or "—" }}</div>
+        <div class="label">Top Roaster</div>
+    </div>
+    {% if summary.highest_rated_bean %}
+    <div class="stat-card">
+        <div class="value">{{ summary.highest_rated_bean.name }}</div>
+        <div class="label">Highest Rated ({{ summary.highest_rated_bean.avg_score }})</div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="chart-grid">
+    <div class="card">
+        <h2>Score Trends</h2>
+        <div class="form-group" style="margin-bottom: 0.5rem;">
+            <select id="trend-group" onchange="loadTrends()">
+                <option value="day">Daily</option>
+                <option value="week">Weekly</option>
+                <option value="month">Monthly</option>
+            </select>
+        </div>
+        <div class="chart-container">
+            <canvas id="trendsChart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Brew Method Distribution</h2>
+        <div class="chart-container">
+            <canvas id="distributionChart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Correlations</h2>
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <div class="form-group" style="flex: 1; margin: 0;">
+                <label>X Axis</label>
+                <select id="corr-x" onchange="loadCorrelations()">
+                    <option value="bean_amount_grams">Bean Amount</option>
+                    <option value="water_amount_ml">Water Amount</option>
+                    <option value="water_temp_f">Water Temp (°F)</option>
+                    <option value="brew_time_seconds">Brew Time</option>
+                </select>
+            </div>
+            <div class="form-group" style="flex: 1; margin: 0;">
+                <label>Y Axis</label>
+                <select id="corr-y" onchange="loadCorrelations()">
+                    <option value="overall_score">Overall Score</option>
+                    <option value="bitterness">Bitterness</option>
+                    <option value="acidity">Acidity</option>
+                    <option value="sweetness">Sweetness</option>
+                    <option value="body">Body</option>
+                </select>
+            </div>
+        </div>
+        <div class="chart-container">
+            <canvas id="correlationChart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Roaster Distribution</h2>
+        <div class="chart-container">
+            <canvas id="roasterChart"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/chart.umd.min.js"></script>
+<script>
+const COLORS = [
+    '#6b4423', '#d4a574', '#8b5e3c', '#a67c52', '#c49a6c',
+    '#4a2c0f', '#e6c9a8', '#9e7b5b', '#b8860b', '#deb887'
+];
+
+let trendsChart, distChart, corrChart, roasterChart;
+
+async function loadTrends() {
+    const groupBy = document.getElementById('trend-group').value;
+    const resp = await fetch(`/api/v1/analytics/trends?group_by=${groupBy}`);
+    const data = await resp.json();
+    if (trendsChart) trendsChart.destroy();
+    trendsChart = new Chart(document.getElementById('trendsChart'), {
+        type: 'line',
+        data: {
+            labels: data.map(d => d.period),
+            datasets: [{
+                label: 'Avg Score',
+                data: data.map(d => d.avg_score),
+                borderColor: '#6b4423',
+                backgroundColor: 'rgba(107,68,35,0.1)',
+                fill: true,
+                tension: 0.3,
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 10 } } }
+    });
+}
+
+async function loadDistribution() {
+    const resp = await fetch('/api/v1/analytics/distributions?field=brew_method');
+    const data = await resp.json();
+    if (distChart) distChart.destroy();
+    distChart = new Chart(document.getElementById('distributionChart'), {
+        type: 'doughnut',
+        data: {
+            labels: data.map(d => d.label),
+            datasets: [{ data: data.map(d => d.count), backgroundColor: COLORS }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+}
+
+async function loadCorrelations() {
+    try {
+        const x = document.getElementById('corr-x').value;
+        const y = document.getElementById('corr-y').value;
+        const resp = await fetch(`/api/v1/analytics/correlations?x=${x}&y=${y}`);
+        if (!resp.ok) { console.error('Correlation fetch failed:', resp.status); return; }
+        const data = await resp.json();
+        if (corrChart) corrChart.destroy();
+        const xLabel = document.getElementById('corr-x').selectedOptions[0].text;
+        const yLabel = document.getElementById('corr-y').selectedOptions[0].text;
+        corrChart = new Chart(document.getElementById('correlationChart'), {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: `${xLabel} vs ${yLabel}`,
+                    data: data.map(d => ({ x: d.x, y: d.y })),
+                    backgroundColor: 'rgba(107,68,35,0.6)',
+                    pointRadius: 6,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    x: { title: { display: true, text: xLabel } },
+                    y: { title: { display: true, text: yLabel } }
+                },
+                plugins: {
+                    legend: { display: true },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => `${xLabel}: ${ctx.parsed.x}, ${yLabel}: ${ctx.parsed.y}`
+                        }
+                    }
+                }
+            }
+        });
+    } catch (e) {
+        console.error('Failed to load correlations:', e);
+    }
+}
+
+async function loadRoasterDist() {
+    const resp = await fetch('/api/v1/analytics/distributions?field=roaster');
+    const data = await resp.json();
+    if (roasterChart) roasterChart.destroy();
+    roasterChart = new Chart(document.getElementById('roasterChart'), {
+        type: 'bar',
+        data: {
+            labels: data.map(d => d.label),
+            datasets: [{ label: 'Brews', data: data.map(d => d.count), backgroundColor: '#6b4423' }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y' }
+    });
+}
+
+// Load all on page ready
+loadTrends();
+loadDistribution();
+loadCorrelations();
+loadRoasterDist();
+</script>
+{% endblock %}

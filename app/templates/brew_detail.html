@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Brew #{{ brew.id }} - Coffee Tracker{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>{{ brew.roaster }} — {{ brew.bean_name }}</h1>
+    <div style="display: flex; gap: 0.5rem;">
+        <a href="/brews/{{ brew.id }}/delete" class="btn btn-danger btn-sm" onclick="return confirm('Delete this brew?')">Delete</a>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Brew Details</h2>
+    <div class="detail-grid">
+        <div class="detail-item">
+            <div class="label">Date</div>
+            <div class="value">{{ brew.brew_date }}</div>
+        </div>
+        <div class="detail-item">
+            <div class="label">Method</div>
+            <div class="value">{{ brew.brew_method }}{% if brew.brew_device %} ({{ brew.brew_device }}){% endif %}</div>
+        </div>
+        {% if brew.bean_origin %}
+        <div class="detail-item">
+            <div class="label">Origin</div>
+            <div class="value">{{ brew.bean_origin }}</div>
+        </div>
+        {% endif %}
+        {% if brew.bean_process %}
+        <div class="detail-item">
+            <div class="label">Process</div>
+            <div class="value">{{ brew.bean_process }}</div>
+        </div>
+        {% endif %}
+        {% if brew.roast_date %}
+        <div class="detail-item">
+            <div class="label">Roast Date</div>
+            <div class="value">{{ brew.roast_date }}</div>
+        </div>
+        {% endif %}
+        {% if brew.roast_level %}
+        <div class="detail-item">
+            <div class="label">Roast Level</div>
+            <div class="value">{{ brew.roast_level }}</div>
+        </div>
+        {% endif %}
+        <div class="detail-item">
+            <div class="label">Coffee</div>
+            <div class="value">{{ brew.bean_amount_grams }}g</div>
+        </div>
+        <div class="detail-item">
+            <div class="label">Water</div>
+            <div class="value">{{ brew.water_amount_ml }}ml</div>
+        </div>
+        <div class="detail-item">
+            <div class="label">Ratio</div>
+            <div class="value">1:{{ "%.1f"|format(brew.water_amount_ml / brew.bean_amount_grams) }}</div>
+        </div>
+        {% if brew.grind_setting %}
+        <div class="detail-item">
+            <div class="label">Grind</div>
+            <div class="value">{{ brew.grind_setting }}{% if brew.grinder %} ({{ brew.grinder }}){% endif %}</div>
+        </div>
+        {% endif %}
+        {% if brew.water_temp_f %}
+        <div class="detail-item">
+            <div class="label">Water Temp</div>
+            <div class="value">{{ brew.water_temp_f }}°F / {{ brew.water_temp_c }}°C</div>
+        </div>
+        {% endif %}
+        {% if brew.brew_time_seconds %}
+        <div class="detail-item">
+            <div class="label">Brew Time</div>
+            <div class="value">{{ brew.brew_time_seconds // 60 }}:{{ "%02d"|format(brew.brew_time_seconds % 60) }}</div>
+        </div>
+        {% endif %}
+        {% if brew.bloom %}
+        <div class="detail-item">
+            <div class="label">Bloom</div>
+            <div class="value">{{ brew.bloom_time_seconds or '?' }}s / {{ brew.bloom_water_ml or '?' }}ml</div>
+        </div>
+        {% endif %}
+        {% if brew.flavor_notes_expected %}
+        <div class="detail-item full-width">
+            <div class="label">Expected Flavor Notes</div>
+            <div class="value">{{ brew.flavor_notes_expected }}</div>
+        </div>
+        {% endif %}
+        {% if brew.water_filter_type %}
+        <div class="detail-item">
+            <div class="label">Water Filter</div>
+            <div class="value">{{ brew.water_filter_type }}</div>
+        </div>
+        {% endif %}
+    </div>
+    {% if brew.notes %}
+    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+        <div class="label" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem;">Notes</div>
+        <p>{{ brew.notes }}</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Save as Template -->
+<div class="card">
+    <form method="post" action="/brews/{{ brew.id }}/save-template" style="display: flex; gap: 1rem; align-items: end;">
+        <div class="form-group" style="flex: 1; margin: 0;">
+            <label>Save as Template</label>
+            <input type="text" name="name" placeholder="Template name, e.g. My V60 Recipe" required>
+        </div>
+        <button type="submit" class="btn btn-outline">Save Template</button>
+    </form>
+</div>
+
+<!-- Rating -->
+<div class="card">
+    {% if brew.rating %}
+    <h2>Rating <span class="badge badge-score">{{ brew.rating.overall_score }}/10</span></h2>
+    <div class="detail-grid" style="margin-top: 1rem;">
+        {% for attr in ['bitterness', 'acidity', 'sweetness', 'body', 'aroma', 'aftertaste'] %}
+        {% set val = brew.rating[attr] %}
+        {% if val is not none %}
+        <div class="detail-item">
+            <div class="label">{{ attr|capitalize }}</div>
+            <div class="value">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div style="flex: 1; background: var(--border); border-radius: 4px; height: 8px;">
+                        <div style="width: {{ val / 5 * 100 }}%; background: var(--accent); border-radius: 4px; height: 8px;"></div>
+                    </div>
+                    <span>{{ val }}/5</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% if brew.rating.flavor_notes_experienced %}
+    <div style="margin-top: 1rem;">
+        <div class="label" style="font-size: 0.8rem; color: var(--text-muted);">Experienced Flavors</div>
+        <div>{{ brew.rating.flavor_notes_experienced }}</div>
+    </div>
+    {% endif %}
+    {% if brew.rating.comments %}
+    <div style="margin-top: 0.5rem;">
+        <div class="label" style="font-size: 0.8rem; color: var(--text-muted);">Comments</div>
+        <div>{{ brew.rating.comments }}</div>
+    </div>
+    {% endif %}
+
+    <!-- Update rating form (collapsed) -->
+    <details style="margin-top: 1rem;">
+        <summary style="cursor: pointer; color: var(--primary);">Update Rating</summary>
+        <form method="post" action="/brews/{{ brew.id }}/rating" style="margin-top: 1rem;">
+            {% include "partials/rating_form_fields.html" %}
+            <button type="submit" class="btn btn-primary" style="margin-top: 1rem;">Update Rating</button>
+        </form>
+    </details>
+    {% else %}
+    <h2>Rate This Brew</h2>
+    <form method="post" action="/brews/{{ brew.id }}/rating" style="margin-top: 1rem;">
+        {% include "partials/rating_form_fields.html" %}
+        <button type="submit" class="btn btn-primary" style="margin-top: 1rem;">Submit Rating</button>
+    </form>
+    {% endif %}
+</div>
+
+<!-- Recommendations -->
+{% if recommendations %}
+<div class="card">
+    <h2>Recommendations</h2>
+    <ul class="rec-list">
+        {% for rec in recommendations %}
+        <li>
+            {% if rec.category %}<div class="rec-category">{{ rec.category }}</div>{% endif %}
+            {{ rec.suggestion }}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% endblock %}

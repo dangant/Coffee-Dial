@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit Template" if template else "New Template" }} - Coffee Tracker{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>{{ "Edit Template" if template else "New Template" }}</h1>
+</div>
+
+<div class="card">
+    <form method="post" action="{{ '/templates/' ~ template.id ~ '/edit' if template else '/templates/new' }}">
+        <div class="form-group" style="margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border);">
+            <label>Template Name *</label>
+            <input type="text" name="name" value="{{ template.name if template else '' }}" required
+                placeholder="e.g., Onyx Sagastume Family Natural">
+        </div>
+
+        <h3 style="margin-bottom: 1rem; color: var(--primary);">Bean Info (all optional)</h3>
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Roaster</label>
+                <input type="text" name="roaster" value="{{ template.roaster or '' if template else '' }}" placeholder="e.g., Onyx Coffee Lab">
+            </div>
+            <div class="form-group">
+                <label>Bean Name</label>
+                <input type="text" name="bean_name" value="{{ template.bean_name or '' if template else '' }}">
+            </div>
+            <div class="form-group">
+                <label>Origin</label>
+                <input type="text" name="bean_origin" value="{{ template.bean_origin or '' if template else '' }}">
+            </div>
+            <div class="form-group">
+                <label>Process</label>
+                <select name="bean_process">
+                    <option value="">—</option>
+                    {% for p in ["Washed", "Natural", "Honey", "Anaerobic", "Wet-Hulled", "Other"] %}
+                    <option value="{{ p }}" {{ 'selected' if template and template.bean_process == p else '' }}>{{ p }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Roast Date</label>
+                <input type="date" name="roast_date" value="{{ template.roast_date if template and template.roast_date else '' }}">
+            </div>
+            <div class="form-group">
+                <label>Roast Level</label>
+                <select name="roast_level">
+                    <option value="">—</option>
+                    {% for r in ["Light", "Medium-Light", "Medium", "Medium-Dark", "Dark"] %}
+                    <option value="{{ r }}" {{ 'selected' if template and template.roast_level == r else '' }}>{{ r }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group full-width">
+                <label>Expected Flavor Notes (select up to 4)</label>
+                <input type="text" id="flavor-search" placeholder="Search flavors..."
+                    oninput="filterFlavorNotes(this.value)"
+                    style="margin-bottom: 0.5rem; max-width: 300px;">
+                {% set selected_notes = template.flavor_notes_expected.split(', ') if template and template.flavor_notes_expected else [] %}
+                <div class="flavor-checkboxes" id="flavor-checkboxes">
+                    {% for note in flavor_notes %}
+                    <label class="checkbox-pill">
+                        <input type="checkbox" name="flavor_notes_expected" value="{{ note.name }}"
+                            {{ 'checked' if note.name in selected_notes else '' }}
+                            onchange="limitCheckboxes(this, 4)">
+                        <span>{{ note.name }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; align-items: center;">
+                    <input type="text" id="new-flavor-input" placeholder="Add new flavor note..."
+                        style="flex: 1;" onkeydown="if(event.key==='Enter'){event.preventDefault();addFlavorNote();}">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="addFlavorNote()">Add</button>
+                </div>
+            </div>
+        </div>
+
+        <h3 style="margin: 1.5rem 0 1rem; color: var(--primary);">Brew Parameters (all optional)</h3>
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Bean Amount (g)</label>
+                <input type="number" step="0.1" name="bean_amount_grams" value="{{ template.bean_amount_grams or '' if template else '' }}">
+            </div>
+            <div class="form-group">
+                <label>Water Amount (ml)</label>
+                <input type="number" step="0.1" name="water_amount_ml" value="{{ template.water_amount_ml or '' if template else '' }}">
+            </div>
+            <div class="form-group">
+                <label>Grind Setting (rotations.number.tick)</label>
+                <input type="text" name="grind_setting" value="{{ template.grind_setting or '' if template else '' }}" placeholder="e.g., 1.3.5" pattern="[0-9]+\.[0-9]+\.[0-9]+">
+            </div>
+            <div class="form-group">
+                <label>Grinder</label>
+                <input type="text" name="grinder" value="{{ template.grinder or '' if template else '' }}" placeholder="e.g., 1Zpresso JMax">
+            </div>
+            <div class="form-group">
+                <label>Brew Method</label>
+                <select name="brew_method">
+                    <option value="">—</option>
+                    {% for m in ["Pour Over", "Espresso", "French Press", "AeroPress", "Moka Pot", "Cold Brew", "Drip", "Siphon", "Other"] %}
+                    <option value="{{ m }}" {{ 'selected' if template and template.brew_method == m else '' }}>{{ m }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Brew Device</label>
+                <select name="brew_device">
+                    <option value="">—</option>
+                    {% for device in brew_devices %}
+                    <option value="{{ device.name }}" {{ 'selected' if template and template.brew_device == device.name else '' }}>{{ device.name }}</option>
+                    {% endfor %}
+                </select>
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; align-items: center;">
+                    <input type="text" id="new-device-input" placeholder="Or add new device..." style="flex: 1;"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();addBrewDevice();}">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="addBrewDevice()">Add</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>
+                    Water Temp
+                    <span class="temp-toggle" style="margin-left: 0.5rem;">
+                        <button type="button" data-unit="F" class="active" onclick="toggleTemp('F')">°F</button>
+                        <button type="button" data-unit="C" onclick="toggleTemp('C')">°C</button>
+                    </span>
+                </label>
+                <input type="number" step="0.1" name="water_temp" id="water-temp-input"
+                    value="{{ template.water_temp_f or '' if template else '' }}">
+                <input type="hidden" name="water_temp_unit" id="water-temp-unit" value="F">
+            </div>
+            <div class="form-group">
+                <label>Brew Time (seconds)</label>
+                <input type="number" name="brew_time_seconds" value="{{ template.brew_time_seconds or '' if template else '' }}">
+            </div>
+            <div class="toggle-group">
+                <input type="checkbox" name="bloom" id="bloom-toggle" {{ 'checked' if template and template.bloom else '' }}>
+                <label for="bloom-toggle" style="font-weight: 600;">Bloom</label>
+            </div>
+            <div class="form-group">
+                <label>Bloom Time (seconds)</label>
+                <input type="number" name="bloom_time_seconds" value="{{ template.bloom_time_seconds or '' if template else '' }}">
+            </div>
+            <div class="form-group">
+                <label>Bloom Water (ml)</label>
+                <input type="number" step="0.1" name="bloom_water_ml" value="{{ template.bloom_water_ml or '' if template else '' }}">
+            </div>
+            <div class="form-group">
+                <label>Water Filter</label>
+                <input type="text" name="water_filter_type" value="{{ template.water_filter_type or '' if template else '' }}">
+            </div>
+            <div class="form-group">
+                <label>Altitude (ft)</label>
+                <input type="number" name="altitude_ft" value="{{ template.altitude_ft or '' if template else '' }}">
+            </div>
+            <div class="form-group full-width">
+                <label>Notes</label>
+                <textarea name="notes">{{ template.notes or '' if template else '' }}</textarea>
+            </div>
+        </div>
+
+        <div style="margin-top: 1.5rem; display: flex; gap: 1rem;">
+            <button type="submit" class="btn btn-primary">{{ "Update Template" if template else "Create Template" }}</button>
+            <a href="/templates" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
