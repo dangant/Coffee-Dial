@@ -49,6 +49,10 @@
                 </select>
             </div>
             <div class="form-group">
+                <label>Roast Date</label>
+                <input type="date" name="roast_date" value="{{ brew.roast_date if brew and brew.roast_date else '' }}">
+            </div>
+            <div class="form-group">
                 <label>Roast Level</label>
                 <select name="roast_level">
                     <option value="">—</option>
@@ -58,8 +62,26 @@
                 </select>
             </div>
             <div class="form-group full-width">
-                <label>Expected Flavor Notes (from bag)</label>
-                <input type="text" name="flavor_notes_expected" value="{{ brew.flavor_notes_expected or '' if brew else '' }}" placeholder="e.g., cherry, chocolate, citrus">
+                <label>Expected Flavor Notes (select up to 4)</label>
+                <input type="text" id="flavor-search" placeholder="Search flavors..."
+                    oninput="filterFlavorNotes(this.value)"
+                    style="margin-bottom: 0.5rem; max-width: 300px;">
+                {% set selected_notes = brew.flavor_notes_expected.split(', ') if brew and brew.flavor_notes_expected else [] %}
+                <div class="flavor-checkboxes" id="flavor-checkboxes">
+                    {% for note in flavor_notes %}
+                    <label class="checkbox-pill">
+                        <input type="checkbox" name="flavor_notes_expected" value="{{ note.name }}"
+                            {{ 'checked' if note.name in selected_notes else '' }}
+                            onchange="limitCheckboxes(this, 4)">
+                        <span>{{ note.name }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; align-items: center;">
+                    <input type="text" id="new-flavor-input" placeholder="Add new flavor note..."
+                        style="flex: 1;" onkeydown="if(event.key==='Enter'){event.preventDefault();addFlavorNote();}">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="addFlavorNote()">Add</button>
+                </div>
             </div>
         </div>
 
@@ -74,12 +96,12 @@
                 <input type="number" step="0.1" name="water_amount_ml" value="{{ brew.water_amount_ml if brew else '' }}" required placeholder="e.g., 300">
             </div>
             <div class="form-group">
-                <label>Grind Setting</label>
-                <input type="number" step="0.1" name="grind_setting" value="{{ brew.grind_setting or '' if brew else '' }}" placeholder="e.g., 24">
+                <label>Grind Setting (rotations.number.tick)</label>
+                <input type="text" name="grind_setting" value="{{ brew.grind_setting or '' if brew else '' }}" placeholder="e.g., 1.3.5 or 3.2.6" pattern="[0-9]+\.[0-9]+\.[0-9]+">
             </div>
             <div class="form-group">
                 <label>Grinder</label>
-                <input type="text" name="grinder" value="{{ brew.grinder or '' if brew else '' }}" placeholder="e.g., Comandante C40">
+                <input type="text" name="grinder" value="{{ brew.grinder or '' if brew else '' }}" placeholder="e.g., 1Zpresso JMax">
             </div>
             <div class="form-group">
                 <label>Brew Method *</label>
@@ -92,7 +114,12 @@
             </div>
             <div class="form-group">
                 <label>Brew Device</label>
-                <input type="text" name="brew_device" value="{{ brew.brew_device or '' if brew else '' }}" placeholder="e.g., V60, Chemex">
+                <select name="brew_device">
+                    <option value="">—</option>
+                    {% for device in brew_devices %}
+                    <option value="{{ device.name }}" {{ 'selected' if brew and brew.brew_device == device.name else '' }}>{{ device.name }}</option>
+                    {% endfor %}
+                </select>
             </div>
             <div class="form-group">
                 <label>
@@ -102,12 +129,10 @@
                         <button type="button" data-unit="C" onclick="toggleTemp('C')">°C</button>
                     </span>
                 </label>
-                <div id="temp-f-group">
-                    <input type="number" step="0.1" name="water_temp_f" value="{{ brew.water_temp_f or '' if brew else '' }}" placeholder="e.g., 205">
-                </div>
-                <div id="temp-c-group" style="display: none;">
-                    <input type="number" step="0.1" name="water_temp_c" value="{{ brew.water_temp_c or '' if brew else '' }}" placeholder="e.g., 96">
-                </div>
+                <input type="number" step="0.1" name="water_temp" id="water-temp-input"
+                    value="{{ brew.water_temp_f or '' if brew else '' }}"
+                    placeholder="e.g., 205">
+                <input type="hidden" name="water_temp_unit" id="water-temp-unit" value="F">
             </div>
             <div class="form-group">
                 <label>Total Brew Time (seconds)</label>
@@ -136,10 +161,6 @@
             <div class="form-group">
                 <label>Water Filter</label>
                 <input type="text" name="water_filter_type" value="{{ brew.water_filter_type or '' if brew else '' }}" placeholder="e.g., Brita, Third Wave Water">
-            </div>
-            <div class="form-group">
-                <label>Paper Filter</label>
-                <input type="text" name="paper_filter_type" value="{{ brew.paper_filter_type or '' if brew else '' }}" placeholder="e.g., Bleached, Metal, Cloth">
             </div>
             <div class="form-group">
                 <label>Altitude (ft)</label>

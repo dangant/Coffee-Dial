@@ -9,10 +9,11 @@ class BrewBase(BaseModel):
     bean_name: str = Field(max_length=200)
     bean_origin: str | None = None
     bean_process: str | None = None
+    roast_date: date | None = None
     roast_level: str | None = None
     flavor_notes_expected: str | None = None
     bean_amount_grams: float
-    grind_setting: float | None = None
+    grind_setting: str | None = None
     grinder: str | None = None
     bloom: bool = False
     bloom_time_seconds: int | None = None
@@ -24,7 +25,6 @@ class BrewBase(BaseModel):
     brew_device: str | None = None
     brew_time_seconds: int | None = None
     water_filter_type: str | None = None
-    paper_filter_type: str | None = None
     altitude_ft: int | None = None
     notes: str | None = None
     template_id: int | None = None
@@ -40,10 +40,11 @@ class BrewUpdate(BaseModel):
     bean_name: str | None = None
     bean_origin: str | None = None
     bean_process: str | None = None
+    roast_date: date | None = None
     roast_level: str | None = None
     flavor_notes_expected: str | None = None
     bean_amount_grams: float | None = None
-    grind_setting: float | None = None
+    grind_setting: str | None = None
     grinder: str | None = None
     bloom: bool | None = None
     bloom_time_seconds: int | None = None
@@ -55,7 +56,6 @@ class BrewUpdate(BaseModel):
     brew_device: str | None = None
     brew_time_seconds: int | None = None
     water_filter_type: str | None = None
-    paper_filter_type: str | None = None
     altitude_ft: int | None = None
     notes: str | None = None
     template_id: int | None = None

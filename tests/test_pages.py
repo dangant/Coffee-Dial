@@ -37,6 +37,7 @@ def test_create_brew_via_form(client):
         "water_amount_ml": "300",
         "brew_method": "Pour Over",
         "bloom": "off",
+        "water_temp_unit": "F",
     }, follow_redirects=False)
     assert resp.status_code == 303
     assert "/brews/" in resp.headers["location"]

@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -12,6 +13,7 @@ from app.schemas.template import TemplateCreate, TemplateUpdate
 from app.services import (
     analytics_service,
     brew_service,
+    lookup_service,
     rating_service,
     recommendation_service,
     template_service,
@@ -19,6 +21,13 @@ from app.services import (
 
 router = APIRouter(tags=["pages"])
 templates = Jinja2Templates(directory="app/templates")
+
+
+def _get_lookups(db: Session) -> dict:
+    return {
+        "flavor_notes": lookup_service.list_flavor_notes(db),
+        "brew_devices": lookup_service.list_brew_devices(db),
+    }
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -40,7 +49,6 @@ def brew_list(
     db: Session = Depends(get_db),
 ):
     brews = brew_service.list_brews(db, roaster=roaster, brew_method=brew_method)
-    # Check if HTMX partial request
     if request.headers.get("HX-Request"):
         return templates.TemplateResponse("partials/brew_table.html", {
             "request": request, "brews": brews,
@@ -54,8 +62,9 @@ def brew_list(
 @router.get("/brews/new", response_class=HTMLResponse)
 def new_brew_form(request: Request, db: Session = Depends(get_db)):
     tpl_list = template_service.list_templates(db)
+    lookups = _get_lookups(db)
     return templates.TemplateResponse("brew_form.html", {
-        "request": request, "templates_list": tpl_list, "brew": None,
+        "request": request, "templates_list": tpl_list, "brew": None, **lookups,
     })
 
 
@@ -67,8 +76,9 @@ def create_brew_form(
     bean_name: str = Form(...),
     bean_origin: str = Form(""),
     bean_process: str = Form(""),
+    roast_date: str = Form(""),
     roast_level: str = Form(""),
-    flavor_notes_expected: str = Form(""),
+    flavor_notes_expected: list[str] = Form([]),
     bean_amount_grams: float = Form(...),
     grind_setting: str = Form(""),
     grinder: str = Form(""),
@@ -76,40 +86,51 @@ def create_brew_form(
     bloom_time_seconds: str = Form(""),
     bloom_water_ml: str = Form(""),
     water_amount_ml: float = Form(...),
-    water_temp_f: str = Form(""),
-    water_temp_c: str = Form(""),
+    water_temp: str = Form(""),
+    water_temp_unit: str = Form("F"),
     brew_method: str = Form(...),
     brew_device: str = Form(""),
     brew_time_seconds: str = Form(""),
     water_filter_type: str = Form(""),
-    paper_filter_type: str = Form(""),
     altitude_ft: str = Form(""),
     notes: str = Form(""),
     template_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
+    # Convert temp based on chosen unit
+    temp_f = None
+    temp_c = None
+    if water_temp:
+        temp_val = float(water_temp)
+        if water_temp_unit == "C":
+            temp_c = temp_val
+        else:
+            temp_f = temp_val
+
+    notes_str = ", ".join(flavor_notes_expected) if flavor_notes_expected else None
+
     data = BrewCreate(
         brew_date=date.fromisoformat(brew_date),
         roaster=roaster,
         bean_name=bean_name,
         bean_origin=bean_origin or None,
         bean_process=bean_process or None,
+        roast_date=date.fromisoformat(roast_date) if roast_date else None,
         roast_level=roast_level or None,
-        flavor_notes_expected=flavor_notes_expected or None,
+        flavor_notes_expected=notes_str,
         bean_amount_grams=bean_amount_grams,
-        grind_setting=float(grind_setting) if grind_setting else None,
+        grind_setting=grind_setting or None,
         grinder=grinder or None,
         bloom=bloom == "on",
         bloom_time_seconds=int(bloom_time_seconds) if bloom_time_seconds else None,
         bloom_water_ml=float(bloom_water_ml) if bloom_water_ml else None,
         water_amount_ml=water_amount_ml,
-        water_temp_f=float(water_temp_f) if water_temp_f else None,
-        water_temp_c=float(water_temp_c) if water_temp_c else None,
+        water_temp_f=temp_f,
+        water_temp_c=temp_c,
         brew_method=brew_method,
         brew_device=brew_device or None,
         brew_time_seconds=int(brew_time_seconds) if brew_time_seconds else None,
         water_filter_type=water_filter_type or None,
-        paper_filter_type=paper_filter_type or None,
         altitude_ft=int(altitude_ft) if altitude_ft else None,
         notes=notes or None,
         template_id=int(template_id) if template_id else None,
@@ -181,9 +202,10 @@ def template_list(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/templates/new", response_class=HTMLResponse)
-def new_template_form(request: Request):
+def new_template_form(request: Request, db: Session = Depends(get_db)):
+    lookups = _get_lookups(db)
     return templates.TemplateResponse("template_form.html", {
-        "request": request, "template": None,
+        "request": request, "template": None, **lookups,
     })
 
 
@@ -195,8 +217,9 @@ def create_template_form(
     bean_name: str = Form(""),
     bean_origin: str = Form(""),
     bean_process: str = Form(""),
+    roast_date: str = Form(""),
     roast_level: str = Form(""),
-    flavor_notes_expected: str = Form(""),
+    flavor_notes_expected: list[str] = Form([]),
     bean_amount_grams: str = Form(""),
     grind_setting: str = Form(""),
     grinder: str = Form(""),
@@ -204,39 +227,49 @@ def create_template_form(
     bloom_time_seconds: str = Form(""),
     bloom_water_ml: str = Form(""),
     water_amount_ml: str = Form(""),
-    water_temp_f: str = Form(""),
-    water_temp_c: str = Form(""),
+    water_temp: str = Form(""),
+    water_temp_unit: str = Form("F"),
     brew_method: str = Form(""),
     brew_device: str = Form(""),
     brew_time_seconds: str = Form(""),
     water_filter_type: str = Form(""),
-    paper_filter_type: str = Form(""),
     altitude_ft: str = Form(""),
     notes: str = Form(""),
     db: Session = Depends(get_db),
 ):
+    temp_f = None
+    temp_c = None
+    if water_temp:
+        temp_val = float(water_temp)
+        if water_temp_unit == "C":
+            temp_c = temp_val
+        else:
+            temp_f = temp_val
+
+    notes_str = ", ".join(flavor_notes_expected) if flavor_notes_expected else None
+
     data = TemplateCreate(
         name=name,
         roaster=roaster or None,
         bean_name=bean_name or None,
         bean_origin=bean_origin or None,
         bean_process=bean_process or None,
+        roast_date=date.fromisoformat(roast_date) if roast_date else None,
         roast_level=roast_level or None,
-        flavor_notes_expected=flavor_notes_expected or None,
+        flavor_notes_expected=notes_str,
         bean_amount_grams=float(bean_amount_grams) if bean_amount_grams else None,
-        grind_setting=float(grind_setting) if grind_setting else None,
+        grind_setting=grind_setting or None,
         grinder=grinder or None,
         bloom=bloom == "on" if bloom != "off" else None,
         bloom_time_seconds=int(bloom_time_seconds) if bloom_time_seconds else None,
         bloom_water_ml=float(bloom_water_ml) if bloom_water_ml else None,
         water_amount_ml=float(water_amount_ml) if water_amount_ml else None,
-        water_temp_f=float(water_temp_f) if water_temp_f else None,
-        water_temp_c=float(water_temp_c) if water_temp_c else None,
+        water_temp_f=temp_f,
+        water_temp_c=temp_c,
         brew_method=brew_method or None,
         brew_device=brew_device or None,
         brew_time_seconds=int(brew_time_seconds) if brew_time_seconds else None,
         water_filter_type=water_filter_type or None,
-        paper_filter_type=paper_filter_type or None,
         altitude_ft=int(altitude_ft) if altitude_ft else None,
         notes=notes or None,
     )
@@ -249,8 +282,9 @@ def edit_template_form(request: Request, template_id: int, db: Session = Depends
     tpl = template_service.get_template(db, template_id)
     if not tpl:
         return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+    lookups = _get_lookups(db)
     return templates.TemplateResponse("template_form.html", {
-        "request": request, "template": tpl,
+        "request": request, "template": tpl, **lookups,
     })
 
 
@@ -263,8 +297,9 @@ def update_template_form(
     bean_name: str = Form(""),
     bean_origin: str = Form(""),
     bean_process: str = Form(""),
+    roast_date: str = Form(""),
     roast_level: str = Form(""),
-    flavor_notes_expected: str = Form(""),
+    flavor_notes_expected: list[str] = Form([]),
     bean_amount_grams: str = Form(""),
     grind_setting: str = Form(""),
     grinder: str = Form(""),
@@ -272,39 +307,49 @@ def update_template_form(
     bloom_time_seconds: str = Form(""),
     bloom_water_ml: str = Form(""),
     water_amount_ml: str = Form(""),
-    water_temp_f: str = Form(""),
-    water_temp_c: str = Form(""),
+    water_temp: str = Form(""),
+    water_temp_unit: str = Form("F"),
     brew_method: str = Form(""),
     brew_device: str = Form(""),
     brew_time_seconds: str = Form(""),
     water_filter_type: str = Form(""),
-    paper_filter_type: str = Form(""),
     altitude_ft: str = Form(""),
     notes: str = Form(""),
     db: Session = Depends(get_db),
 ):
+    temp_f = None
+    temp_c = None
+    if water_temp:
+        temp_val = float(water_temp)
+        if water_temp_unit == "C":
+            temp_c = temp_val
+        else:
+            temp_f = temp_val
+
+    notes_str = ", ".join(flavor_notes_expected) if flavor_notes_expected else None
+
     data = TemplateUpdate(
         name=name,
         roaster=roaster or None,
         bean_name=bean_name or None,
         bean_origin=bean_origin or None,
         bean_process=bean_process or None,
+        roast_date=date.fromisoformat(roast_date) if roast_date else None,
         roast_level=roast_level or None,
-        flavor_notes_expected=flavor_notes_expected or None,
+        flavor_notes_expected=notes_str,
         bean_amount_grams=float(bean_amount_grams) if bean_amount_grams else None,
-        grind_setting=float(grind_setting) if grind_setting else None,
+        grind_setting=grind_setting or None,
         grinder=grinder or None,
         bloom=bloom == "on" if bloom != "off" else None,
         bloom_time_seconds=int(bloom_time_seconds) if bloom_time_seconds else None,
         bloom_water_ml=float(bloom_water_ml) if bloom_water_ml else None,
         water_amount_ml=float(water_amount_ml) if water_amount_ml else None,
-        water_temp_f=float(water_temp_f) if water_temp_f else None,
-        water_temp_c=float(water_temp_c) if water_temp_c else None,
+        water_temp_f=temp_f,
+        water_temp_c=temp_c,
         brew_method=brew_method or None,
         brew_device=brew_device or None,
         brew_time_seconds=int(brew_time_seconds) if brew_time_seconds else None,
         water_filter_type=water_filter_type or None,
-        paper_filter_type=paper_filter_type or None,
         altitude_ft=int(altitude_ft) if altitude_ft else None,
         notes=notes or None,
     )

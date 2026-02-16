@@ -44,13 +44,25 @@ def get_summary(db: Session) -> dict:
     }
 
 
+def _is_sqlite(db: Session) -> bool:
+    return "sqlite" in str(db.bind.url)
+
+
 def get_trends(db: Session, group_by: str = "day") -> list[dict]:
-    if group_by == "month":
-        date_expr = func.strftime("%Y-%m", Brew.brew_date)
-    elif group_by == "week":
-        date_expr = func.strftime("%Y-%W", Brew.brew_date)
+    if _is_sqlite(db):
+        if group_by == "month":
+            date_expr = func.strftime("%Y-%m", Brew.brew_date)
+        elif group_by == "week":
+            date_expr = func.strftime("%Y-%W", Brew.brew_date)
+        else:
+            date_expr = func.strftime("%Y-%m-%d", Brew.brew_date)
     else:
-        date_expr = func.strftime("%Y-%m-%d", Brew.brew_date)
+        if group_by == "month":
+            date_expr = func.to_char(Brew.brew_date, "YYYY-MM")
+        elif group_by == "week":
+            date_expr = func.to_char(Brew.brew_date, "IYYY-IW")
+        else:
+            date_expr = func.to_char(Brew.brew_date, "YYYY-MM-DD")
 
     rows = (
         db.query(date_expr.label("period"), func.avg(Rating.overall_score).label("avg_score"))
@@ -64,7 +76,7 @@ def get_trends(db: Session, group_by: str = "day") -> list[dict]:
 
 def get_correlations(db: Session, x_field: str, y_field: str) -> list[dict]:
     brew_fields = {
-        "bean_amount_grams", "grind_setting", "water_amount_ml",
+        "bean_amount_grams", "water_amount_ml",
         "water_temp_f", "water_temp_c", "brew_time_seconds",
     }
     rating_fields = {

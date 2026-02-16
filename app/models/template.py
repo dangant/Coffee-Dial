@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -15,10 +15,11 @@ class BrewTemplate(Base):
     bean_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     bean_origin: Mapped[str | None] = mapped_column(String(200), nullable=True)
     bean_process: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    roast_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     roast_level: Mapped[str | None] = mapped_column(String(50), nullable=True)
     flavor_notes_expected: Mapped[str | None] = mapped_column(Text, nullable=True)
     bean_amount_grams: Mapped[float | None] = mapped_column(Float, nullable=True)
-    grind_setting: Mapped[float | None] = mapped_column(Float, nullable=True)
+    grind_setting: Mapped[str | None] = mapped_column(String(20), nullable=True)
     grinder: Mapped[str | None] = mapped_column(String(100), nullable=True)
     bloom: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     bloom_time_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -30,7 +31,6 @@ class BrewTemplate(Base):
     brew_device: Mapped[str | None] = mapped_column(String(100), nullable=True)
     brew_time_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     water_filter_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    paper_filter_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     altitude_ft: Mapped[int | None] = mapped_column(Integer, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

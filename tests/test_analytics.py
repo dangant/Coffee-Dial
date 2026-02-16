@@ -6,7 +6,7 @@ def _create_rated_brew(client, roaster="Onyx", method="Pour Over", score=7.5):
         "bean_amount_grams": 18.0,
         "water_amount_ml": 300.0,
         "brew_method": method,
-        "grind_setting": 24.0,
+        "water_temp_f": 205.0,
     })
     brew_id = brew.json()["id"]
     client.post(f"/api/v1/brews/{brew_id}/rating/", json={
@@ -36,11 +36,11 @@ def test_trends(client):
 
 def test_correlations(client):
     _create_rated_brew(client)
-    resp = client.get("/api/v1/analytics/correlations?x=grind_setting&y=overall_score")
+    resp = client.get("/api/v1/analytics/correlations?x=water_temp_f&y=overall_score")
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) == 1
-    assert data[0]["x"] == 24.0
+    assert data[0]["x"] == 205.0
 
 
 def test_distributions(client):

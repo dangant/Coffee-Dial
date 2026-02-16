@@ -6,11 +6,11 @@ from app.schemas.template import TemplateCreate, TemplateUpdate
 
 # Fields shared between Brew and BrewTemplate (excluding id, timestamps, template_id)
 TEMPLATE_FIELDS = [
-    "roaster", "bean_name", "bean_origin", "bean_process", "roast_level",
+    "roaster", "bean_name", "bean_origin", "bean_process", "roast_date", "roast_level",
     "flavor_notes_expected", "bean_amount_grams", "grind_setting", "grinder",
     "bloom", "bloom_time_seconds", "bloom_water_ml", "water_amount_ml",
     "water_temp_f", "water_temp_c", "brew_method", "brew_device",
-    "brew_time_seconds", "water_filter_type", "paper_filter_type",
+    "brew_time_seconds", "water_filter_type",
     "altitude_ft", "notes",
 ]
 

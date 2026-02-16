@@ -26,14 +26,14 @@ def test_create_template_from_brew(client):
         "bean_amount_grams": 18.0,
         "water_amount_ml": 300.0,
         "brew_method": "Pour Over",
-        "grind_setting": 24.0,
+        "grind_setting": "1.3.5",
     })
     brew_id = brew.json()["id"]
     resp = client.post(f"/api/v1/templates/from-brew/{brew_id}?name=My+Saved+Recipe")
     assert resp.status_code == 201
     data = resp.json()
     assert data["roaster"] == "Onyx"
-    assert data["grind_setting"] == 24.0
+    assert data["grind_setting"] == "1.3.5"
 
 
 def test_delete_template(client):

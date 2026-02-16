@@ -31,6 +31,12 @@
             <div class="value">{{ brew.bean_process }}</div>
         </div>
         {% endif %}
+        {% if brew.roast_date %}
+        <div class="detail-item">
+            <div class="label">Roast Date</div>
+            <div class="value">{{ brew.roast_date }}</div>
+        </div>
+        {% endif %}
         {% if brew.roast_level %}
         <div class="detail-item">
             <div class="label">Roast Level</div>
@@ -83,12 +89,6 @@
         <div class="detail-item">
             <div class="label">Water Filter</div>
             <div class="value">{{ brew.water_filter_type }}</div>
-        </div>
-        {% endif %}
-        {% if brew.paper_filter_type %}
-        <div class="detail-item">
-            <div class="label">Paper Filter</div>
-            <div class="value">{{ brew.paper_filter_type }}</div>
         </div>
         {% endif %}
     </div>

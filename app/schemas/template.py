@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -9,10 +9,11 @@ class TemplateBase(BaseModel):
     bean_name: str | None = None
     bean_origin: str | None = None
     bean_process: str | None = None
+    roast_date: date | None = None
     roast_level: str | None = None
     flavor_notes_expected: str | None = None
     bean_amount_grams: float | None = None
-    grind_setting: float | None = None
+    grind_setting: str | None = None
     grinder: str | None = None
     bloom: bool | None = None
     bloom_time_seconds: int | None = None
@@ -24,7 +25,6 @@ class TemplateBase(BaseModel):
     brew_device: str | None = None
     brew_time_seconds: int | None = None
     water_filter_type: str | None = None
-    paper_filter_type: str | None = None
     altitude_ft: int | None = None
     notes: str | None = None
 
@@ -39,10 +39,11 @@ class TemplateUpdate(BaseModel):
     bean_name: str | None = None
     bean_origin: str | None = None
     bean_process: str | None = None
+    roast_date: date | None = None
     roast_level: str | None = None
     flavor_notes_expected: str | None = None
     bean_amount_grams: float | None = None
-    grind_setting: float | None = None
+    grind_setting: str | None = None
     grinder: str | None = None
     bloom: bool | None = None
     bloom_time_seconds: int | None = None
@@ -54,7 +55,6 @@ class TemplateUpdate(BaseModel):
     brew_device: str | None = None
     brew_time_seconds: int | None = None
     water_filter_type: str | None = None
-    paper_filter_type: str | None = None
     altitude_ft: int | None = None
     notes: str | None = None
 

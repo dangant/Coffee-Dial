@@ -249,6 +249,36 @@ tr:hover { background: rgba(107, 68, 35, 0.03); }
     color: #fff;
 }
 
+/* Flavor note checkboxes */
+.flavor-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.checkbox-pill {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+.checkbox-pill input[type="checkbox"] { display: none; }
+.checkbox-pill span {
+    padding: 0.3rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 0.8rem;
+    transition: all 0.15s;
+    user-select: none;
+}
+.checkbox-pill input:checked + span {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+.checkbox-pill input:disabled + span {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .form-grid { grid-template-columns: 1fr; }
