@@ -1,0 +1,36 @@
+{% if brews %}
+<table>
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Roaster</th>
+            <th>Bean</th>
+            <th>Method</th>
+            <th>Dose / Water</th>
+            <th>Score</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for brew in brews %}
+        <tr>
+            <td><a href="/brews/{{ brew.id }}">{{ brew.brew_date }}</a></td>
+            <td>{{ brew.roaster }}</td>
+            <td>{{ brew.bean_name }}</td>
+            <td>{{ brew.brew_method }}</td>
+            <td>{{ brew.bean_amount_grams }}g / {{ brew.water_amount_ml }}ml</td>
+            <td>
+                {% if brew.rating %}
+                    <span class="badge badge-score">{{ brew.rating.overall_score }}/10</span>
+                {% else %}
+                    <a href="/brews/{{ brew.id }}" style="color: var(--text-muted); font-size: 0.85rem;">Rate</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p style="color: var(--text-muted); padding: 2rem 0; text-align: center;">
+    No brews found. <a href="/brews/new">Log your first brew!</a>
+</p>
+{% endif %}

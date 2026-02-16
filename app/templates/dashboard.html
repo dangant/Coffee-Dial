@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Coffee Tracker{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <a href="/brews/new" class="btn btn-primary">+ New Brew</a>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="value">{{ summary.total_brews }}</div>
+        <div class="label">Total Brews</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ summary.average_score or "—" }}</div>
+        <div class="label">Avg Score</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ summary.top_roaster or "—" }}</div>
+        <div class="label">Top Roaster</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ summary.top_bean or "—" }}</div>
+        <div class="label">Most Brewed</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Recent Brews</h2>
+    {% if recent_brews %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Roaster</th>
+                <th>Bean</th>
+                <th>Method</th>
+                <th>Score</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for brew in recent_brews %}
+            <tr>
+                <td><a href="/brews/{{ brew.id }}">{{ brew.brew_date }}</a></td>
+                <td>{{ brew.roaster }}</td>
+                <td>{{ brew.bean_name }}</td>
+                <td>{{ brew.brew_method }}</td>
+                <td>
+                    {% if brew.rating %}
+                        <span class="badge badge-score">{{ brew.rating.overall_score }}/10</span>
+                    {% else %}
+                        <span style="color: var(--text-muted)">—</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: var(--text-muted); padding: 2rem 0; text-align: center;">
+        No brews yet. <a href="/brews/new">Log your first brew!</a>
+    </p>
+    {% endif %}
+</div>
+{% endblock %}

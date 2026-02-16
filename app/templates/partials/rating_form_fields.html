@@ -1,0 +1,33 @@
+<div class="form-group">
+    <label>Overall Score (1-10) *</label>
+    <div class="slider-group">
+        <input type="range" name="overall_score" min="1" max="10" step="0.5"
+            value="{{ brew.rating.overall_score if brew.rating else 5 }}">
+        <span class="slider-value">{{ brew.rating.overall_score if brew.rating else 5 }}</span>
+    </div>
+</div>
+
+<div class="form-grid">
+    {% for attr in ['bitterness', 'acidity', 'sweetness', 'body', 'aroma', 'aftertaste'] %}
+    <div class="form-group">
+        <label>{{ attr|capitalize }} (1-5)</label>
+        <div class="slider-group">
+            <input type="range" name="{{ attr }}" min="1" max="5" step="0.5"
+                value="{{ brew.rating[attr] if brew.rating and brew.rating[attr] else 3 }}">
+            <span class="slider-value">{{ brew.rating[attr] if brew.rating and brew.rating[attr] else 3 }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="form-group">
+    <label>Experienced Flavor Notes</label>
+    <input type="text" name="flavor_notes_experienced"
+        value="{{ brew.rating.flavor_notes_experienced or '' if brew.rating else '' }}"
+        placeholder="What did you actually taste?">
+</div>
+
+<div class="form-group">
+    <label>Comments</label>
+    <textarea name="comments" placeholder="Additional thoughts...">{{ brew.rating.comments or '' if brew.rating else '' }}</textarea>
+</div>

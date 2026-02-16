@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Brew History - Coffee Tracker{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Brew History</h1>
+    <div style="display: flex; gap: 0.5rem;">
+        <button onclick="exportCSV()" class="btn btn-outline btn-sm">Export CSV</button>
+        <a href="/brews/new" class="btn btn-primary">+ New Brew</a>
+    </div>
+</div>
+
+<div class="filter-bar">
+    <div class="form-group">
+        <label>Roaster</label>
+        <input type="text" name="roaster" value="{{ roaster }}" placeholder="Filter by roaster..."
+            hx-get="/brews" hx-target="#brew-table" hx-trigger="keyup changed delay:300ms"
+            hx-include="[name='brew_method']">
+    </div>
+    <div class="form-group">
+        <label>Brew Method</label>
+        <input type="text" name="brew_method" value="{{ brew_method }}" placeholder="Filter by method..."
+            hx-get="/brews" hx-target="#brew-table" hx-trigger="keyup changed delay:300ms"
+            hx-include="[name='roaster']">
+    </div>
+</div>
+
+<div class="card">
+    <div id="brew-table">
+        {% include "partials/brew_table.html" %}
+    </div>
+</div>
+{% endblock %}
