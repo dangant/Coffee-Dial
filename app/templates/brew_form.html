@@ -96,8 +96,8 @@
                 <input type="number" step="0.1" name="water_amount_ml" value="{{ brew.water_amount_ml if brew else '' }}" required placeholder="e.g., 300">
             </div>
             <div class="form-group">
-                <label>Grind Setting (rotations.number.tick)</label>
-                <input type="text" name="grind_setting" value="{{ brew.grind_setting or '' if brew else '' }}" placeholder="e.g., 1.3.5 or 3.2.6" pattern="[0-9]+\.[0-9]+\.[0-9]+">
+                <label>Grind Setting</label>
+                <input type="text" name="grind_setting" value="{{ brew.grind_setting or '' if brew else '' }}" placeholder="e.g., 1.3.5 or 24" pattern="[0-9]+(\.[0-9]+)*">
             </div>
             <div class="form-group">
                 <label>Grinder</label>

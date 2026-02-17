@@ -74,10 +74,17 @@ def get_trends(db: Session, group_by: str = "day") -> list[dict]:
     return [{"period": r.period, "avg_score": round(r.avg_score, 2)} for r in rows]
 
 
-def get_correlations(db: Session, x_field: str, y_field: str) -> list[dict]:
+def get_correlations(
+    db: Session,
+    x_field: str,
+    y_field: str,
+    bean_name: str | None = None,
+    grinder: str | None = None,
+) -> list[dict]:
     brew_fields = {
         "bean_amount_grams", "water_amount_ml",
         "water_temp_f", "water_temp_c", "brew_time_seconds",
+        "grind_setting",
     }
     rating_fields = {
         "overall_score", "bitterness", "acidity", "sweetness",
@@ -98,13 +105,44 @@ def get_correlations(db: Session, x_field: str, y_field: str) -> list[dict]:
     else:
         return []
 
-    rows = (
+    query = (
         db.query(x_col.label("x"), y_col.label("y"))
         .join(Rating)
         .filter(x_col.isnot(None), y_col.isnot(None))
-        .all()
     )
-    return [{"x": r.x, "y": r.y} for r in rows]
+    if bean_name:
+        query = query.filter(Brew.bean_name == bean_name)
+    if grinder:
+        query = query.filter(Brew.grinder == grinder)
+
+    rows = query.all()
+
+    results = []
+    for r in rows:
+        x_val = r.x
+        y_val = r.y
+        if x_field == "grind_setting":
+            try:
+                x_val = int(str(x_val).replace(".", ""))
+            except (ValueError, TypeError):
+                continue
+        if y_field == "grind_setting":
+            try:
+                y_val = int(str(y_val).replace(".", ""))
+            except (ValueError, TypeError):
+                continue
+        results.append({"x": x_val, "y": y_val})
+    return results
+
+
+def get_filter_options(db: Session) -> dict:
+    bean_names = [
+        r[0] for r in db.query(Brew.bean_name).distinct().filter(Brew.bean_name.isnot(None)).order_by(Brew.bean_name).all()
+    ]
+    grinders = [
+        r[0] for r in db.query(Brew.grinder).distinct().filter(Brew.grinder.isnot(None)).order_by(Brew.grinder).all()
+    ]
+    return {"bean_names": bean_names, "grinders": grinders}
 
 
 def get_distributions(db: Session, field: str) -> list[dict]:
