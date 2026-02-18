@@ -31,7 +31,7 @@
                 <label>Process</label>
                 <select name="bean_process">
                     <option value="">—</option>
-                    {% for p in ["Washed", "Natural", "Honey", "Anaerobic", "Wet-Hulled", "Other"] %}
+                    {% for p in ["Washed", "Natural", "Honey", "Anaerobic", "Co-ferment", "Wet-Hulled", "Other"] %}
                     <option value="{{ p }}" {{ 'selected' if template and template.bean_process == p else '' }}>{{ p }}</option>
                     {% endfor %}
                 </select>
