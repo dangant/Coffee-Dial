@@ -16,3 +16,10 @@ class BrewDevice(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+
+
+class Grinder(Base):
+    __tablename__ = "grinders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)

@@ -89,7 +89,17 @@
             </div>
             <div class="form-group">
                 <label>Grinder</label>
-                <input type="text" name="grinder" value="{{ template.grinder or '' if template else '' }}" placeholder="e.g., 1Zpresso JMax">
+                <select name="grinder">
+                    <option value="">—</option>
+                    {% for g in grinders %}
+                    <option value="{{ g.name }}" {{ 'selected' if template and template.grinder == g.name else '' }}>{{ g.name }}</option>
+                    {% endfor %}
+                </select>
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; align-items: center;">
+                    <input type="text" id="new-grinder-input" placeholder="Or add new grinder..." style="flex: 1;"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();addGrinder();}">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="addGrinder()">Add</button>
+                </div>
             </div>
             <div class="form-group">
                 <label>Brew Method</label>

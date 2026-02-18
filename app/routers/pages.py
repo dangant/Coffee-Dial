@@ -27,6 +27,7 @@ def _get_lookups(db: Session) -> dict:
     return {
         "flavor_notes": lookup_service.list_flavor_notes(db),
         "brew_devices": lookup_service.list_brew_devices(db),
+        "grinders": lookup_service.list_grinders(db),
     }
 
 

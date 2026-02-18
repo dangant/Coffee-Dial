@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.models.lookups import BrewDevice, FlavorNote
+from app.models.lookups import BrewDevice, FlavorNote, Grinder
 
 
 def list_flavor_notes(db: Session) -> list[FlavorNote]:
@@ -33,6 +33,21 @@ def add_brew_device(db: Session, name: str) -> BrewDevice:
     return device
 
 
+def list_grinders(db: Session) -> list[Grinder]:
+    return db.query(Grinder).order_by(Grinder.name).all()
+
+
+def add_grinder(db: Session, name: str) -> Grinder:
+    existing = db.query(Grinder).filter(Grinder.name == name).first()
+    if existing:
+        return existing
+    grinder = Grinder(name=name)
+    db.add(grinder)
+    db.commit()
+    db.refresh(grinder)
+    return grinder
+
+
 def seed_lookups(db: Session) -> None:
     """Seed default flavor notes and brew devices if none exist."""
     if db.query(FlavorNote).count() == 0:
@@ -47,6 +62,19 @@ def seed_lookups(db: Session) -> None:
         ]
         for name in defaults:
             db.add(FlavorNote(name=name))
+        db.commit()
+
+    if db.query(Grinder).count() == 0:
+        defaults = [
+            "1Zpresso J-Max", "1Zpresso JX-Pro", "1Zpresso K-Max", "1Zpresso K-Plus",
+            "1Zpresso Q2", "Baratza Encore", "Baratza Sette 270",
+            "Baratza Virtuoso+", "Comandante C40", "Fellow Ode",
+            "Hario Skerton", "JavaPresse Manual", "Kinu M47",
+            "Niche Zero", "Porlex Mini", "Timemore C2",
+            "Timemore Chestnut X",
+        ]
+        for name in defaults:
+            db.add(Grinder(name=name))
         db.commit()
 
     if db.query(BrewDevice).count() == 0:

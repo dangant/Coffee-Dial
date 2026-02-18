@@ -28,6 +28,16 @@ def add_flavor_note(data: LookupCreate, db: Session = Depends(get_db)):
     return lookup_service.add_flavor_note(db, data.name.strip())
 
 
+@router.get("/grinders", response_model=list[LookupItem])
+def list_grinders(db: Session = Depends(get_db)):
+    return lookup_service.list_grinders(db)
+
+
+@router.post("/grinders", response_model=LookupItem, status_code=201)
+def add_grinder(data: LookupCreate, db: Session = Depends(get_db)):
+    return lookup_service.add_grinder(db, data.name.strip())
+
+
 @router.get("/brew-devices", response_model=list[LookupItem])
 def list_brew_devices(db: Session = Depends(get_db)):
     return lookup_service.list_brew_devices(db)

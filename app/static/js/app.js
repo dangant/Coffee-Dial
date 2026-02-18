@@ -187,6 +187,33 @@ async function addBrewDevice() {
     }
 }
 
+// Inline add grinder via API
+async function addGrinder() {
+    const input = document.getElementById('new-grinder-input');
+    const name = input.value.trim();
+    if (!name) return;
+    try {
+        const resp = await fetch('/api/v1/lookups/grinders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }),
+        });
+        if (!resp.ok) return;
+        const grinder = await resp.json();
+        const select = document.querySelector('select[name="grinder"]');
+        if (select) {
+            const opt = document.createElement('option');
+            opt.value = grinder.name;
+            opt.textContent = grinder.name;
+            opt.selected = true;
+            select.appendChild(opt);
+        }
+        input.value = '';
+    } catch (e) {
+        console.error('Failed to add grinder:', e);
+    }
+}
+
 // CSV export
 async function exportCSV() {
     try {
