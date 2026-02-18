@@ -90,19 +90,25 @@ def get_correlations(
         "overall_score", "bitterness", "acidity", "sweetness",
         "body", "aroma", "aftertaste",
     }
+    computed_fields = {"days_since_roast"}
 
-    if x_field in brew_fields:
-        x_col = getattr(Brew, x_field)
-    elif x_field in rating_fields:
-        x_col = getattr(Rating, x_field)
-    else:
+    def _resolve_col(field: str):
+        if field == "days_since_roast":
+            if _is_sqlite(db):
+                return func.julianday(Brew.brew_date) - func.julianday(Brew.roast_date)
+            else:
+                return Brew.brew_date - Brew.roast_date
+        if field in brew_fields:
+            return getattr(Brew, field)
+        if field in rating_fields:
+            return getattr(Rating, field)
+        return None
+
+    x_col = _resolve_col(x_field)
+    if x_col is None:
         return []
-
-    if y_field in rating_fields:
-        y_col = getattr(Rating, y_field)
-    elif y_field in brew_fields:
-        y_col = getattr(Brew, y_field)
-    else:
+    y_col = _resolve_col(y_field)
+    if y_col is None:
         return []
 
     query = (
@@ -110,6 +116,8 @@ def get_correlations(
         .join(Rating)
         .filter(x_col.isnot(None), y_col.isnot(None))
     )
+    if x_field == "days_since_roast" or y_field == "days_since_roast":
+        query = query.filter(Brew.roast_date.isnot(None), Brew.brew_date.isnot(None))
     if bean_name:
         query = query.filter(Brew.bean_name == bean_name)
     if grinder:
@@ -129,6 +137,16 @@ def get_correlations(
         if y_field == "grind_setting":
             try:
                 y_val = int(str(y_val).replace(".", ""))
+            except (ValueError, TypeError):
+                continue
+        if x_field == "days_since_roast":
+            try:
+                x_val = int(float(x_val))
+            except (ValueError, TypeError):
+                continue
+        if y_field == "days_since_roast":
+            try:
+                y_val = int(float(y_val))
             except (ValueError, TypeError):
                 continue
         results.append({"x": x_val, "y": y_val})

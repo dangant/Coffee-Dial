@@ -5,7 +5,11 @@
       "Bash(curl:*)",
       "Bash(pip install:*)",
       "Bash(python -m pytest:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(python -c:*)"
     ]
   }
 }

@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}Grind Lab - Coffee Data{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Grind Setting Lab</h1>
+</div>
+
+<!-- Upload & Parameters -->
+<div class="card">
+    <h2>Upload & Parameters</h2>
+    <form id="grindForm" onsubmit="return false;">
+        <div class="form-grid">
+            <div class="form-group full-width">
+                <label>Coffee Grounds Image</label>
+                <div class="drop-zone" id="dropZone">
+                    <p>Drag & drop an image here, or click to browse</p>
+                    <p style="font-size:0.8rem; margin-top:0.5rem;">Photo of grounds on a white/light background (JPEG, PNG, WebP)</p>
+                    <input type="file" id="imageInput" accept="image/jpeg,image/png,image/webp">
+                    <img id="imagePreview" style="display:none;" alt="Preview">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Threshold (%)</label>
+                <div class="slider-group">
+                    <input type="range" id="threshold" min="10" max="95" step="0.1" value="58.8">
+                    <span class="slider-value" id="thresholdVal">58.8</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Pixel Scale (mm/px, 0 = pixels only)</label>
+                <input type="number" id="pixelScale" value="0" min="0" step="0.001">
+            </div>
+
+            <div class="form-group">
+                <label>Max Cluster Axis (px)</label>
+                <input type="number" id="maxClusterAxis" value="500" min="10">
+            </div>
+
+            <div class="form-group">
+                <label>Min Surface (px)</label>
+                <input type="number" id="minSurface" value="4" min="1">
+            </div>
+
+            <div class="form-group">
+                <label>Min Roundness</label>
+                <div class="slider-group">
+                    <input type="range" id="minRoundness" min="0" max="1" step="0.01" value="0">
+                    <span class="slider-value" id="roundnessVal">0</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Max Image Dimension (px)</label>
+                <input type="number" id="maxDimension" value="2000" min="200">
+            </div>
+
+            <div class="form-group full-width" style="text-align:center; padding-top:0.5rem;">
+                <button type="button" class="btn btn-primary" onclick="analyzeGrind()" id="analyzeBtn">Analyze</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Loading -->
+<div class="grind-loading" id="loading">
+    <div class="spinner"></div>
+    <p style="margin-top:1rem; color:var(--text-muted);">Analyzing particles... this may take a moment for large images.</p>
+</div>
+
+<!-- Results -->
+<div id="resultsSection" style="display:none;">
+    <!-- Stats -->
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="value" id="statCount">-</div>
+            <div class="label">Particles Detected</div>
+        </div>
+        <div class="stat-card">
+            <div class="value" id="statAvg">-</div>
+            <div class="label">Avg Diameter</div>
+        </div>
+        <div class="stat-card">
+            <div class="value" id="statStd">-</div>
+            <div class="label">Std Deviation</div>
+        </div>
+    </div>
+
+    <!-- Images -->
+    <div class="card">
+        <h2>Analysis Images</h2>
+        <div class="result-images">
+            <div>
+                <h3 style="margin-bottom:0.5rem; font-size:0.95rem; color:var(--text-muted);">Threshold Mask</h3>
+                <img id="thresholdImg" alt="Threshold view">
+            </div>
+            <div>
+                <h3 style="margin-bottom:0.5rem; font-size:0.95rem; color:var(--text-muted);">Detected Particles</h3>
+                <img id="clusterImg" alt="Cluster view">
+            </div>
+        </div>
+    </div>
+
+    <!-- Histogram -->
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <h2 style="margin-bottom:0;">Particle Size Distribution</h2>
+            <button class="btn btn-outline btn-sm" onclick="downloadCSV()">Download CSV</button>
+        </div>
+        <div class="chart-container" style="height:350px;">
+            <canvas id="histogramChart"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+let csvData = '';
+let histChart = null;
+
+// Drop zone
+const dropZone = document.getElementById('dropZone');
+const imageInput = document.getElementById('imageInput');
+const preview = document.getElementById('imagePreview');
+
+dropZone.addEventListener('click', () => imageInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) {
+        imageInput.files = e.dataTransfer.files;
+        showPreview(e.dataTransfer.files[0]);
+    }
+});
+imageInput.addEventListener('change', () => {
+    if (imageInput.files.length) showPreview(imageInput.files[0]);
+});
+
+function showPreview(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+        preview.src = e.target.result;
+        preview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
+// Sliders
+document.getElementById('threshold').addEventListener('input', e => {
+    document.getElementById('thresholdVal').textContent = e.target.value;
+});
+document.getElementById('minRoundness').addEventListener('input', e => {
+    document.getElementById('roundnessVal').textContent = e.target.value;
+});
+
+// Analyze
+async function analyzeGrind() {
+    const file = imageInput.files[0];
+    if (!file) { alert('Please select an image first.'); return; }
+
+    const form = new FormData();
+    form.append('image', file);
+    form.append('threshold', document.getElementById('threshold').value);
+    form.append('pixel_scale', document.getElementById('pixelScale').value);
+    form.append('max_cluster_axis', document.getElementById('maxClusterAxis').value);
+    form.append('min_surface', document.getElementById('minSurface').value);
+    form.append('min_roundness', document.getElementById('minRoundness').value);
+    form.append('max_dimension', document.getElementById('maxDimension').value);
+
+    document.getElementById('loading').classList.add('active');
+    document.getElementById('resultsSection').style.display = 'none';
+    document.getElementById('analyzeBtn').disabled = true;
+
+    try {
+        const resp = await fetch('/api/v1/grind-lab/analyze', { method: 'POST', body: form });
+        if (!resp.ok) {
+            const err = await resp.json();
+            throw new Error(err.detail || 'Analysis failed');
+        }
+        const data = await resp.json();
+        displayResults(data);
+    } catch (err) {
+        alert('Error: ' + err.message);
+    } finally {
+        document.getElementById('loading').classList.remove('active');
+        document.getElementById('analyzeBtn').disabled = false;
+    }
+}
+
+function displayResults(data) {
+    const unit = data.avg_diameter_mm != null ? 'mm' : 'px';
+    const avg = data.avg_diameter_mm != null ? data.avg_diameter_mm : data.avg_diameter_px;
+    const std = data.std_diameter_mm != null ? data.std_diameter_mm : data.std_diameter_px;
+
+    document.getElementById('statCount').textContent = data.particle_count;
+    document.getElementById('statAvg').textContent = avg + ' ' + unit;
+    document.getElementById('statStd').textContent = std + ' ' + unit;
+
+    document.getElementById('thresholdImg').src = 'data:image/jpeg;base64,' + data.threshold_image;
+    document.getElementById('clusterImg').src = 'data:image/jpeg;base64,' + data.cluster_image;
+
+    csvData = data.csv;
+    renderHistogram(data.histogram);
+
+    document.getElementById('resultsSection').style.display = 'block';
+}
+
+function renderHistogram(hist) {
+    if (histChart) histChart.destroy();
+    const ctx = document.getElementById('histogramChart').getContext('2d');
+    histChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: hist.labels,
+            datasets: [
+                {
+                    label: 'Particle Count',
+                    data: hist.counts,
+                    backgroundColor: 'rgba(107, 68, 35, 0.7)',
+                    yAxisID: 'y',
+                },
+                {
+                    label: 'Mass-weighted (%)',
+                    data: hist.mass_weighted,
+                    backgroundColor: 'rgba(212, 165, 116, 0.7)',
+                    yAxisID: 'y1',
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: {
+                    ticks: { maxRotation: 45, font: { size: 10 } },
+                    title: { display: true, text: 'Diameter (' + (hist.unit || 'px') + ')' },
+                },
+                y: {
+                    position: 'left',
+                    title: { display: true, text: 'Count' },
+                    beginAtZero: true,
+                },
+                y1: {
+                    position: 'right',
+                    title: { display: true, text: 'Mass %' },
+                    beginAtZero: true,
+                    grid: { drawOnChartArea: false },
+                },
+            },
+        },
+    });
+}
+
+function downloadCSV() {
+    if (!csvData) return;
+    const blob = new Blob([csvData], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'grind_analysis.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+</script>
+{% endblock %}

@@ -9,6 +9,7 @@ from app.database import Base, SessionLocal, engine
 from app.routers import (
     api_analytics,
     api_brews,
+    api_grind_lab,
     api_lookups,
     api_ratings,
     api_recommendations,
@@ -56,6 +57,7 @@ app.include_router(api_templates.router)
 app.include_router(api_analytics.router)
 app.include_router(api_recommendations.router)
 app.include_router(api_lookups.router)
+app.include_router(api_grind_lab.router)
 
 # Page routers
 app.include_router(pages.router)

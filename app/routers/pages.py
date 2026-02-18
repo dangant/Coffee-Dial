@@ -463,3 +463,9 @@ def analytics_page(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse("analytics.html", {
         "request": request, "summary": summary,
     })
+
+
+# Grind Lab page
+@router.get("/grind-lab", response_class=HTMLResponse)
+def grind_lab_page(request: Request):
+    return templates.TemplateResponse("grind_lab.html", {"request": request})
