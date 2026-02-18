@@ -153,6 +153,88 @@ def brew_detail(request: Request, brew_id: int, db: Session = Depends(get_db)):
     })
 
 
+@router.get("/brews/{brew_id}/edit", response_class=HTMLResponse)
+def edit_brew_form(request: Request, brew_id: int, db: Session = Depends(get_db)):
+    brew = brew_service.get_brew(db, brew_id)
+    if not brew:
+        return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+    lookups = _get_lookups(db)
+    return templates.TemplateResponse("brew_form.html", {
+        "request": request, "brew": brew, "templates_list": None, **lookups,
+    })
+
+
+@router.post("/brews/{brew_id}/edit")
+def update_brew_form(
+    request: Request,
+    brew_id: int,
+    brew_date: str = Form(...),
+    roaster: str = Form(...),
+    bean_name: str = Form(...),
+    bean_origin: str = Form(""),
+    bean_process: str = Form(""),
+    roast_date: str = Form(""),
+    roast_level: str = Form(""),
+    flavor_notes_expected: list[str] = Form([]),
+    bean_amount_grams: float = Form(...),
+    grind_setting: str = Form(""),
+    grinder: str = Form(""),
+    bloom: str = Form("off"),
+    bloom_time_seconds: str = Form(""),
+    bloom_water_ml: str = Form(""),
+    water_amount_ml: float = Form(...),
+    water_temp: str = Form(""),
+    water_temp_unit: str = Form("F"),
+    brew_method: str = Form(...),
+    brew_device: str = Form(""),
+    brew_time_seconds: str = Form(""),
+    water_filter_type: str = Form(""),
+    altitude_ft: str = Form(""),
+    notes: str = Form(""),
+    template_id: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    temp_f = None
+    temp_c = None
+    if water_temp:
+        temp_val = float(water_temp)
+        if water_temp_unit == "C":
+            temp_c = temp_val
+        else:
+            temp_f = temp_val
+
+    notes_str = ", ".join(flavor_notes_expected) if flavor_notes_expected else None
+
+    data = BrewCreate(
+        brew_date=date.fromisoformat(brew_date),
+        roaster=roaster,
+        bean_name=bean_name,
+        bean_origin=bean_origin or None,
+        bean_process=bean_process or None,
+        roast_date=date.fromisoformat(roast_date) if roast_date else None,
+        roast_level=roast_level or None,
+        flavor_notes_expected=notes_str,
+        bean_amount_grams=bean_amount_grams,
+        grind_setting=grind_setting or None,
+        grinder=grinder or None,
+        bloom=bloom == "on",
+        bloom_time_seconds=int(bloom_time_seconds) if bloom_time_seconds else None,
+        bloom_water_ml=float(bloom_water_ml) if bloom_water_ml else None,
+        water_amount_ml=water_amount_ml,
+        water_temp_f=temp_f,
+        water_temp_c=temp_c,
+        brew_method=brew_method,
+        brew_device=brew_device or None,
+        brew_time_seconds=int(brew_time_seconds) if brew_time_seconds else None,
+        water_filter_type=water_filter_type or None,
+        altitude_ft=int(altitude_ft) if altitude_ft else None,
+        notes=notes or None,
+        template_id=int(template_id) if template_id else None,
+    )
+    brew_service.update_brew(db, brew_id, data)
+    return RedirectResponse(f"/brews/{brew_id}", status_code=303)
+
+
 @router.post("/brews/{brew_id}/rating")
 def submit_rating(
     request: Request,

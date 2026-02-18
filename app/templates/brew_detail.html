@@ -4,6 +4,7 @@
 <div class="page-header">
     <h1>{{ brew.roaster }} — {{ brew.bean_name }}</h1>
     <div style="display: flex; gap: 0.5rem;">
+        <a href="/brews/{{ brew.id }}/edit" class="btn btn-primary btn-sm">Edit</a>
         <a href="/brews/{{ brew.id }}/delete" class="btn btn-danger btn-sm" onclick="return confirm('Delete this brew?')">Delete</a>
     </div>
 </div>

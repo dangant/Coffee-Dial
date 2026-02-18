@@ -18,7 +18,7 @@
     </div>
     {% endif %}
 
-    <form method="post" action="/brews/new">
+    <form method="post" action="{{ '/brews/' ~ brew.id ~ '/edit' if brew else '/brews/new' }}">
         <input type="hidden" name="template_id" value="{{ brew.template_id or '' if brew else '' }}">
 
         <h3 style="margin-bottom: 1rem; color: var(--primary);">Bean Info</h3>
@@ -183,8 +183,8 @@
         </div>
 
         <div style="margin-top: 1.5rem; display: flex; gap: 1rem;">
-            <button type="submit" class="btn btn-primary">Save Brew</button>
-            <a href="/brews" class="btn btn-outline">Cancel</a>
+            <button type="submit" class="btn btn-primary">{{ "Update Brew" if brew else "Save Brew" }}</button>
+            <a href="{{ '/brews/' ~ brew.id if brew else '/brews' }}" class="btn btn-outline">Cancel</a>
         </div>
     </form>
 </div>
