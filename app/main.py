@@ -22,6 +22,15 @@ from app.services.recommendation_service import seed_rules
 # Create tables
 Base.metadata.create_all(bind=engine)
 
+# Migrate: add missing columns
+from sqlalchemy import text, inspect
+with engine.connect() as conn:
+    inspector = inspect(engine)
+    rating_cols = [c["name"] for c in inspector.get_columns("ratings")] if "ratings" in inspector.get_table_names() else []
+    if "flavor_notes_accuracy" not in rating_cols:
+        conn.execute(text("ALTER TABLE ratings ADD COLUMN flavor_notes_accuracy FLOAT"))
+        conn.commit()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
