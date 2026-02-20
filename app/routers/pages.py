@@ -75,9 +75,14 @@ def new_brew_form(request: Request, db: Session = Depends(get_db)):
     lookups = _get_lookups(db)
     recent = brew_service.list_brews(db, limit=1)
     last_brew = recent[0] if recent else None
+    bean_options = brew_service.get_distinct_beans(db)
+    method_options = brew_service.get_distinct_methods(db)
     ctx = {
         "request": request, "brew": None, "last_brew": last_brew,
-        "today": date.today().isoformat(), **lookups,
+        "today": date.today().isoformat(),
+        "bean_options": bean_options,
+        "method_options": method_options,
+        **lookups,
     }
     if not last_brew:
         ctx["templates_list"] = template_service.list_templates(db)

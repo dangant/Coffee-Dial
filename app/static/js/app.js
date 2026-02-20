@@ -52,6 +52,92 @@ async function loadTemplate(selectEl) {
     }
 }
 
+// Load from last brew matching bean + method picker selections
+async function loadFromLastBrew() {
+    const beanPicker = document.getElementById('bean-picker');
+    const methodPicker = document.getElementById('method-picker');
+    if (!beanPicker || !methodPicker) return;
+
+    const beanVal = beanPicker.value;
+    const methodVal = methodPicker.value;
+    if (!beanVal && !methodVal) return;
+
+    const params = new URLSearchParams();
+    if (beanVal) {
+        const [roaster, bean_name] = beanVal.split('|||');
+        params.set('roaster', roaster);
+        params.set('bean_name', bean_name);
+    }
+    if (methodVal) {
+        params.set('brew_method', methodVal);
+    }
+
+    try {
+        const resp = await fetch(`/api/v1/brews/recent-match?${params}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+
+        const fieldMap = {
+            roaster: 'roaster', bean_name: 'bean_name', bean_origin: 'bean_origin',
+            bean_process: 'bean_process', roast_date: 'roast_date', roast_level: 'roast_level',
+            bean_amount_grams: 'bean_amount_grams', grind_setting: 'grind_setting',
+            grinder: 'grinder', bloom_time_seconds: 'bloom_time_seconds',
+            bloom_water_ml: 'bloom_water_ml', water_amount_ml: 'water_amount_ml',
+            brew_method: 'brew_method', brew_device: 'brew_device',
+            water_filter_type: 'water_filter_type',
+            altitude_ft: 'altitude_ft', notes: 'notes',
+        };
+        for (const [key, formName] of Object.entries(fieldMap)) {
+            const el = document.querySelector(`[name="${formName}"]`);
+            if (el) el.value = data[key] != null ? data[key] : '';
+        }
+        // Handle brew_time_seconds as m:ss
+        const btEl = document.querySelector('[name="brew_time_seconds"]');
+        if (btEl) {
+            if (data.brew_time_seconds != null) {
+                const m = Math.floor(data.brew_time_seconds / 60);
+                const s = data.brew_time_seconds % 60;
+                btEl.value = `${m}:${String(s).padStart(2, '0')}`;
+            } else {
+                btEl.value = '';
+            }
+        }
+        // Handle water temp
+        if (data.water_temp_f != null) {
+            const tempInput = document.getElementById('water-temp-input');
+            if (tempInput) tempInput.value = data.water_temp_f;
+            toggleTemp('F');
+        } else if (data.water_temp_c != null) {
+            const tempInput = document.getElementById('water-temp-input');
+            if (tempInput) tempInput.value = data.water_temp_c;
+            toggleTemp('C');
+        } else {
+            const tempInput = document.getElementById('water-temp-input');
+            if (tempInput) tempInput.value = '';
+        }
+        // Handle flavor notes checkboxes
+        document.querySelectorAll('[name="flavor_notes_expected"]').forEach(cb => cb.checked = false);
+        if (data.flavor_notes_expected) {
+            const notes = data.flavor_notes_expected.split(', ');
+            document.querySelectorAll('[name="flavor_notes_expected"]').forEach(cb => {
+                cb.checked = notes.includes(cb.value);
+            });
+        }
+        enforceCheckboxLimit(4);
+        // Handle bloom checkbox
+        const bloomEl = document.getElementById('bloom-toggle');
+        if (bloomEl) {
+            bloomEl.checked = !!data.bloom;
+            document.getElementById('bloom-fields').style.display = data.bloom ? '' : 'none';
+        }
+        // Set template_id
+        const tplIdEl = document.querySelector('[name="template_id"]');
+        if (tplIdEl) tplIdEl.value = data.template_id || '';
+    } catch (e) {
+        console.error('Failed to load from last brew:', e);
+    }
+}
+
 // Slider value display
 function updateSliderValue(slider) {
     const display = slider.parentElement.querySelector('.slider-value');

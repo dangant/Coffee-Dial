@@ -6,6 +6,35 @@
 </div>
 
 <div class="card">
+    {% if not brew and bean_options %}
+    <div class="form-grid" style="margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border);">
+        <div class="form-group">
+            <label>Bean</label>
+            <select id="bean-picker" onchange="loadFromLastBrew()">
+                <option value="">— Select bean —</option>
+                {% for roaster_val, bean_val in bean_options %}
+                <option value="{{ roaster_val }}|||{{ bean_val }}"
+                    {{ 'selected' if last_brew and last_brew.roaster == roaster_val and last_brew.bean_name == bean_val else '' }}>
+                    {{ roaster_val }} — {{ bean_val }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Brew Method</label>
+            <select id="method-picker" onchange="loadFromLastBrew()">
+                <option value="">— Select method —</option>
+                {% for method_val in method_options %}
+                <option value="{{ method_val }}"
+                    {{ 'selected' if last_brew and last_brew.brew_method == method_val else '' }}>
+                    {{ method_val }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    {% endif %}
+
     {% if templates_list %}
     <div class="form-group" style="margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border);">
         <label>Load from Template</label>

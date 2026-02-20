@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import desc
+from sqlalchemy import desc, distinct, func
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.brew import Brew
@@ -77,3 +77,59 @@ def delete_brew(db: Session, brew_id: int) -> bool:
     db.delete(brew)
     db.commit()
     return True
+
+
+def get_distinct_beans(db: Session) -> list[tuple[str, str]]:
+    """Return distinct (roaster, bean_name) pairs ordered by most recently brewed."""
+    subq = (
+        db.query(
+            Brew.roaster,
+            Brew.bean_name,
+            func.max(Brew.brew_date).label("last_date"),
+            func.max(Brew.id).label("last_id"),
+        )
+        .group_by(Brew.roaster, Brew.bean_name)
+        .subquery()
+    )
+    rows = (
+        db.query(subq.c.roaster, subq.c.bean_name)
+        .order_by(desc(subq.c.last_date), desc(subq.c.last_id))
+        .all()
+    )
+    return [(r[0], r[1]) for r in rows]
+
+
+def get_distinct_methods(db: Session) -> list[str]:
+    """Return distinct brew_method values ordered by most recently used."""
+    subq = (
+        db.query(
+            Brew.brew_method,
+            func.max(Brew.brew_date).label("last_date"),
+            func.max(Brew.id).label("last_id"),
+        )
+        .group_by(Brew.brew_method)
+        .subquery()
+    )
+    rows = (
+        db.query(subq.c.brew_method)
+        .order_by(desc(subq.c.last_date), desc(subq.c.last_id))
+        .all()
+    )
+    return [r[0] for r in rows]
+
+
+def get_recent_match(
+    db: Session,
+    roaster: str | None = None,
+    bean_name: str | None = None,
+    brew_method: str | None = None,
+) -> Brew | None:
+    """Return the most recent brew matching all provided filters."""
+    query = db.query(Brew).options(joinedload(Brew.rating))
+    if roaster:
+        query = query.filter(Brew.roaster == roaster)
+    if bean_name:
+        query = query.filter(Brew.bean_name == bean_name)
+    if brew_method:
+        query = query.filter(Brew.brew_method == brew_method)
+    return query.order_by(desc(Brew.brew_date), desc(Brew.id)).first()
