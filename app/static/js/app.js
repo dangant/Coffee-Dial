@@ -1,34 +1,39 @@
+// Reset all brew form fields to blank
+function resetBrewForm() {
+    const allFields = [
+        'roaster', 'bean_name', 'bean_origin', 'bean_process', 'roast_date',
+        'roast_level', 'bean_amount_grams', 'grind_setting', 'grinder',
+        'bloom_time_seconds', 'bloom_water_ml', 'water_amount_ml',
+        'brew_method', 'brew_device', 'water_filter_type', 'altitude_ft',
+    ];
+    allFields.forEach(name => {
+        const el = document.querySelector(`[name="${name}"]`);
+        if (el) el.value = '';
+    });
+    const btEl = document.querySelector('[name="brew_time_seconds"]');
+    if (btEl) btEl.value = '';
+    const notesEl = document.querySelector('[name="notes"]');
+    if (notesEl) notesEl.value = '';
+    const tempInput = document.getElementById('water-temp-input');
+    if (tempInput) tempInput.value = '';
+    toggleTemp('F');
+    document.querySelectorAll('[name="flavor_notes_expected"]').forEach(cb => cb.checked = false);
+    enforceCheckboxLimit(4);
+    const bloomEl = document.getElementById('bloom-toggle');
+    if (bloomEl) {
+        bloomEl.checked = false;
+        document.getElementById('bloom-fields').style.display = 'none';
+    }
+    const tplIdEl = document.querySelector('[name="template_id"]');
+    if (tplIdEl) tplIdEl.value = '';
+}
+
 // Template loading
 async function loadTemplate(selectEl) {
     const id = selectEl.value;
-    // No template selected — reset all fields
-    if (!id) {
-        const blankData = {};
-        const allFields = [
-            'roaster', 'bean_name', 'bean_origin', 'bean_process', 'roast_date',
-            'roast_level', 'bean_amount_grams', 'grind_setting', 'grinder',
-            'bloom_time_seconds', 'bloom_water_ml', 'water_amount_ml',
-            'brew_method', 'brew_device', 'water_filter_type', 'altitude_ft', 'notes',
-        ];
-        allFields.forEach(name => {
-            const el = document.querySelector(`[name="${name}"]`);
-            if (el) el.value = '';
-        });
-        document.querySelector('[name="brew_time_seconds"]').value = '';
-        const tempInput = document.getElementById('water-temp-input');
-        if (tempInput) tempInput.value = '';
-        toggleTemp('F');
-        document.querySelectorAll('[name="flavor_notes_expected"]').forEach(cb => cb.checked = false);
-        enforceCheckboxLimit(4);
-        const bloomEl = document.getElementById('bloom-toggle');
-        if (bloomEl) {
-            bloomEl.checked = false;
-            document.getElementById('bloom-fields').style.display = 'none';
-        }
-        const tplIdEl = document.querySelector('[name="template_id"]');
-        if (tplIdEl) tplIdEl.value = '';
-        return;
-    }
+    // Always reset the form first
+    resetBrewForm();
+    if (!id) return;
     try {
         const resp = await fetch(`/api/v1/templates/${id}`);
         if (!resp.ok) return;
@@ -45,20 +50,18 @@ async function loadTemplate(selectEl) {
         };
         for (const [key, formName] of Object.entries(fieldMap)) {
             const el = document.querySelector(`[name="${formName}"]`);
-            if (el) el.value = data[key] != null ? data[key] : '';
+            if (el && data[key] != null) el.value = data[key];
         }
         // Handle brew_time_seconds as m:ss
-        const btEl = document.querySelector('[name="brew_time_seconds"]');
-        if (btEl) {
-            if (data.brew_time_seconds != null) {
+        if (data.brew_time_seconds != null) {
+            const btEl = document.querySelector('[name="brew_time_seconds"]');
+            if (btEl) {
                 const m = Math.floor(data.brew_time_seconds / 60);
                 const s = data.brew_time_seconds % 60;
                 btEl.value = `${m}:${String(s).padStart(2, '0')}`;
-            } else {
-                btEl.value = '';
             }
         }
-        // Handle water temp (show in F by default)
+        // Handle water temp
         if (data.water_temp_f != null) {
             const tempInput = document.getElementById('water-temp-input');
             if (tempInput) tempInput.value = data.water_temp_f;
@@ -67,24 +70,22 @@ async function loadTemplate(selectEl) {
             const tempInput = document.getElementById('water-temp-input');
             if (tempInput) tempInput.value = data.water_temp_c;
             toggleTemp('C');
-        } else {
-            const tempInput = document.getElementById('water-temp-input');
-            if (tempInput) tempInput.value = '';
         }
         // Handle flavor notes checkboxes
-        document.querySelectorAll('[name="flavor_notes_expected"]').forEach(cb => cb.checked = false);
         if (data.flavor_notes_expected) {
             const notes = data.flavor_notes_expected.split(', ');
             document.querySelectorAll('[name="flavor_notes_expected"]').forEach(cb => {
                 cb.checked = notes.includes(cb.value);
             });
+            enforceCheckboxLimit(4);
         }
-        enforceCheckboxLimit(4);
         // Handle bloom checkbox and fields visibility
-        const bloomEl = document.getElementById('bloom-toggle');
-        if (bloomEl) {
-            bloomEl.checked = !!data.bloom;
-            document.getElementById('bloom-fields').style.display = data.bloom ? '' : 'none';
+        if (data.bloom) {
+            const bloomEl = document.getElementById('bloom-toggle');
+            if (bloomEl) {
+                bloomEl.checked = true;
+                document.getElementById('bloom-fields').style.display = '';
+            }
         }
         // Set template_id hidden field
         const tplIdEl = document.querySelector('[name="template_id"]');
