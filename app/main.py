@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.auth import AuthMiddleware, router as auth_router
+# from app.auth import AuthMiddleware, router as auth_router
 from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.routers import (
@@ -36,14 +36,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.app_title, lifespan=lifespan)
 
-# Auth middleware
-app.add_middleware(AuthMiddleware)
+# Auth middleware (disabled for debugging)
+# app.add_middleware(AuthMiddleware)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-# Auth routes
-app.include_router(auth_router)
+# Auth routes (disabled for debugging)
+# app.include_router(auth_router)
 
 # Health check
 @app.get("/health")
