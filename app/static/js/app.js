@@ -1,7 +1,34 @@
 // Template loading
 async function loadTemplate(selectEl) {
     const id = selectEl.value;
-    if (!id) return;
+    // No template selected — reset all fields
+    if (!id) {
+        const blankData = {};
+        const allFields = [
+            'roaster', 'bean_name', 'bean_origin', 'bean_process', 'roast_date',
+            'roast_level', 'bean_amount_grams', 'grind_setting', 'grinder',
+            'bloom_time_seconds', 'bloom_water_ml', 'water_amount_ml',
+            'brew_method', 'brew_device', 'water_filter_type', 'altitude_ft', 'notes',
+        ];
+        allFields.forEach(name => {
+            const el = document.querySelector(`[name="${name}"]`);
+            if (el) el.value = '';
+        });
+        document.querySelector('[name="brew_time_seconds"]').value = '';
+        const tempInput = document.getElementById('water-temp-input');
+        if (tempInput) tempInput.value = '';
+        toggleTemp('F');
+        document.querySelectorAll('[name="flavor_notes_expected"]').forEach(cb => cb.checked = false);
+        enforceCheckboxLimit(4);
+        const bloomEl = document.getElementById('bloom-toggle');
+        if (bloomEl) {
+            bloomEl.checked = false;
+            document.getElementById('bloom-fields').style.display = 'none';
+        }
+        const tplIdEl = document.querySelector('[name="template_id"]');
+        if (tplIdEl) tplIdEl.value = '';
+        return;
+    }
     try {
         const resp = await fetch(`/api/v1/templates/${id}`);
         if (!resp.ok) return;
