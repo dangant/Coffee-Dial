@@ -39,19 +39,6 @@ def list_brews(
     return results
 
 
-@router.get("/recent-match", response_model=BrewRead | None)
-def recent_match(
-    roaster: str | None = None,
-    bean_name: str | None = None,
-    brew_method: str | None = None,
-    db: Session = Depends(get_db),
-):
-    brew = brew_service.get_recent_match(db, roaster, bean_name, brew_method)
-    if not brew:
-        raise HTTPException(status_code=404, detail="No matching brew found")
-    return brew
-
-
 @router.get("/{brew_id}", response_model=BrewRead)
 def get_brew(brew_id: int, db: Session = Depends(get_db)):
     brew = brew_service.get_brew(db, brew_id)

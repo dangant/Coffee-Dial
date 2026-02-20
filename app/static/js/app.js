@@ -13,77 +13,6 @@ async function loadTemplate(selectEl) {
             grinder: 'grinder', bloom_time_seconds: 'bloom_time_seconds',
             bloom_water_ml: 'bloom_water_ml', water_amount_ml: 'water_amount_ml',
             brew_method: 'brew_method', brew_device: 'brew_device',
-            brew_time_seconds: 'brew_time_seconds', water_filter_type: 'water_filter_type',
-            altitude_ft: 'altitude_ft', notes: 'notes',
-        };
-        for (const [key, formName] of Object.entries(fieldMap)) {
-            if (data[key] != null) {
-                const el = document.querySelector(`[name="${formName}"]`);
-                if (el) el.value = data[key];
-            }
-        }
-        // Handle water temp (show in F by default)
-        if (data.water_temp_f != null) {
-            const tempInput = document.getElementById('water-temp-input');
-            if (tempInput) tempInput.value = data.water_temp_f;
-        } else if (data.water_temp_c != null) {
-            const tempInput = document.getElementById('water-temp-input');
-            if (tempInput) tempInput.value = data.water_temp_c;
-            toggleTemp('C');
-        }
-        // Handle flavor notes checkboxes
-        if (data.flavor_notes_expected) {
-            const notes = data.flavor_notes_expected.split(', ');
-            document.querySelectorAll('[name="flavor_notes_expected"]').forEach(cb => {
-                cb.checked = notes.includes(cb.value);
-            });
-            enforceCheckboxLimit(4);
-        }
-        // Handle bloom checkbox
-        if (data.bloom != null) {
-            const bloomEl = document.querySelector('[name="bloom"]');
-            if (bloomEl) bloomEl.checked = data.bloom;
-        }
-        // Set template_id hidden field
-        const tplIdEl = document.querySelector('[name="template_id"]');
-        if (tplIdEl) tplIdEl.value = id;
-    } catch (e) {
-        console.error('Failed to load template:', e);
-    }
-}
-
-// Load from last brew matching bean + method picker selections
-async function loadFromLastBrew() {
-    const beanPicker = document.getElementById('bean-picker');
-    const methodPicker = document.getElementById('method-picker');
-    if (!beanPicker || !methodPicker) return;
-
-    const beanVal = beanPicker.value;
-    const methodVal = methodPicker.value;
-    if (!beanVal && !methodVal) return;
-
-    const params = new URLSearchParams();
-    if (beanVal) {
-        const [roaster, bean_name] = beanVal.split('|||');
-        params.set('roaster', roaster);
-        params.set('bean_name', bean_name);
-    }
-    if (methodVal) {
-        params.set('brew_method', methodVal);
-    }
-
-    try {
-        const resp = await fetch(`/api/v1/brews/recent-match?${params}`);
-        if (!resp.ok) return;
-        const data = await resp.json();
-
-        const fieldMap = {
-            roaster: 'roaster', bean_name: 'bean_name', bean_origin: 'bean_origin',
-            bean_process: 'bean_process', roast_date: 'roast_date', roast_level: 'roast_level',
-            bean_amount_grams: 'bean_amount_grams', grind_setting: 'grind_setting',
-            grinder: 'grinder', bloom_time_seconds: 'bloom_time_seconds',
-            bloom_water_ml: 'bloom_water_ml', water_amount_ml: 'water_amount_ml',
-            brew_method: 'brew_method', brew_device: 'brew_device',
             water_filter_type: 'water_filter_type',
             altitude_ft: 'altitude_ft', notes: 'notes',
         };
@@ -102,7 +31,7 @@ async function loadFromLastBrew() {
                 btEl.value = '';
             }
         }
-        // Handle water temp
+        // Handle water temp (show in F by default)
         if (data.water_temp_f != null) {
             const tempInput = document.getElementById('water-temp-input');
             if (tempInput) tempInput.value = data.water_temp_f;
@@ -124,17 +53,17 @@ async function loadFromLastBrew() {
             });
         }
         enforceCheckboxLimit(4);
-        // Handle bloom checkbox
+        // Handle bloom checkbox and fields visibility
         const bloomEl = document.getElementById('bloom-toggle');
         if (bloomEl) {
             bloomEl.checked = !!data.bloom;
             document.getElementById('bloom-fields').style.display = data.bloom ? '' : 'none';
         }
-        // Set template_id
+        // Set template_id hidden field
         const tplIdEl = document.querySelector('[name="template_id"]');
-        if (tplIdEl) tplIdEl.value = data.template_id || '';
+        if (tplIdEl) tplIdEl.value = id;
     } catch (e) {
-        console.error('Failed to load from last brew:', e);
+        console.error('Failed to load template:', e);
     }
 }
 
