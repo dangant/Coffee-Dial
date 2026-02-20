@@ -23,9 +23,10 @@ def get_summary(db: Session) -> dict:
         .first()
     )
     highest_rated = (
-        db.query(Brew.bean_name, func.avg(Rating.overall_score).label("avg"))
+        db.query(Brew.roaster, Brew.bean_name, func.avg(Rating.overall_score).label("avg"))
         .join(Rating)
-        .group_by(Brew.bean_name)
+        .group_by(Brew.roaster, Brew.bean_name)
+        .having(func.count(Rating.id) >= 1)
         .order_by(func.avg(Rating.overall_score).desc())
         .first()
     )
@@ -42,8 +43,8 @@ def get_summary(db: Session) -> dict:
         "top_roaster": top_roaster[0] if top_roaster else None,
         "top_bean": top_bean[0] if top_bean else None,
         "highest_rated_bean": {
-            "name": highest_rated[0],
-            "avg_score": round(highest_rated[1], 2),
+            "name": f"{highest_rated[0]} — {highest_rated[1]}",
+            "avg_score": round(highest_rated[2], 2),
         }
         if highest_rated
         else None,
