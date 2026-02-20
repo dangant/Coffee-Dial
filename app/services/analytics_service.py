@@ -55,7 +55,13 @@ def _is_sqlite(db: Session) -> bool:
     return "sqlite" in str(db.bind.url)
 
 
-def get_trends(db: Session, group_by: str = "day") -> list[dict]:
+def get_trends(
+    db: Session,
+    group_by: str = "day",
+    bean_name: str | None = None,
+    grinder: str | None = None,
+    brew_method: str | None = None,
+) -> list[dict]:
     if _is_sqlite(db):
         if group_by == "month":
             date_expr = func.strftime("%Y-%m", Brew.brew_date)
@@ -71,13 +77,18 @@ def get_trends(db: Session, group_by: str = "day") -> list[dict]:
         else:
             date_expr = func.to_char(Brew.brew_date, "YYYY-MM-DD")
 
-    rows = (
+    query = (
         db.query(date_expr.label("period"), func.avg(Rating.overall_score).label("avg_score"))
         .join(Rating)
-        .group_by("period")
-        .order_by("period")
-        .all()
     )
+    if bean_name:
+        query = query.filter(Brew.bean_name == bean_name)
+    if grinder:
+        query = query.filter(Brew.grinder == grinder)
+    if brew_method:
+        query = query.filter(Brew.brew_method == brew_method)
+
+    rows = query.group_by("period").order_by("period").all()
     return [{"period": r.period, "avg_score": round(r.avg_score, 2)} for r in rows]
 
 
@@ -87,6 +98,7 @@ def get_correlations(
     y_field: str,
     bean_name: str | None = None,
     grinder: str | None = None,
+    brew_method: str | None = None,
 ) -> list[dict]:
     brew_fields = {
         "bean_amount_grams", "water_amount_ml",
@@ -129,6 +141,8 @@ def get_correlations(
         query = query.filter(Brew.bean_name == bean_name)
     if grinder:
         query = query.filter(Brew.grinder == grinder)
+    if brew_method:
+        query = query.filter(Brew.brew_method == brew_method)
 
     rows = query.all()
 
@@ -167,7 +181,10 @@ def get_filter_options(db: Session) -> dict:
     grinders = [
         r[0] for r in db.query(Brew.grinder).distinct().filter(Brew.grinder.isnot(None)).order_by(Brew.grinder).all()
     ]
-    return {"bean_names": bean_names, "grinders": grinders}
+    brew_methods = [
+        r[0] for r in db.query(Brew.brew_method).distinct().filter(Brew.brew_method.isnot(None)).order_by(Brew.brew_method).all()
+    ]
+    return {"bean_names": bean_names, "grinders": grinders, "brew_methods": brew_methods}
 
 
 def get_distributions(db: Session, field: str) -> list[dict]:

@@ -29,12 +29,33 @@
 <div class="chart-grid">
     <div class="card">
         <h2>Score Trends</h2>
-        <div class="form-group" style="margin-bottom: 0.5rem;">
-            <select id="trend-group" onchange="loadTrends()">
-                <option value="day">Daily</option>
-                <option value="week">Weekly</option>
-                <option value="month">Monthly</option>
-            </select>
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
+            <div class="form-group" style="flex: 1; margin: 0; min-width: 100px;">
+                <label>Group By</label>
+                <select id="trend-group" onchange="loadTrends()">
+                    <option value="day">Daily</option>
+                    <option value="week">Weekly</option>
+                    <option value="month">Monthly</option>
+                </select>
+            </div>
+            <div class="form-group" style="flex: 1; margin: 0; min-width: 120px;">
+                <label>Bean</label>
+                <select id="trend-bean" onchange="loadTrends()">
+                    <option value="">All</option>
+                </select>
+            </div>
+            <div class="form-group" style="flex: 1; margin: 0; min-width: 120px;">
+                <label>Grinder</label>
+                <select id="trend-grinder" onchange="loadTrends()">
+                    <option value="">All</option>
+                </select>
+            </div>
+            <div class="form-group" style="flex: 1; margin: 0; min-width: 120px;">
+                <label>Method</label>
+                <select id="trend-method" onchange="loadTrends()">
+                    <option value="">All</option>
+                </select>
+            </div>
         </div>
         <div class="chart-container">
             <canvas id="trendsChart"></canvas>
@@ -84,6 +105,12 @@
                     <option value="">All</option>
                 </select>
             </div>
+            <div class="form-group" style="flex: 1; margin: 0; min-width: 120px;">
+                <label>Method</label>
+                <select id="corr-method" onchange="loadCorrelations()">
+                    <option value="">All</option>
+                </select>
+            </div>
         </div>
         <div class="chart-container">
             <canvas id="correlationChart"></canvas>
@@ -111,7 +138,14 @@ let trendsChart, distChart, corrChart, roasterChart;
 
 async function loadTrends() {
     const groupBy = document.getElementById('trend-group').value;
-    const resp = await fetch(`/api/v1/analytics/trends?group_by=${groupBy}`);
+    const params = new URLSearchParams({ group_by: groupBy });
+    const bean = document.getElementById('trend-bean')?.value;
+    const grinder = document.getElementById('trend-grinder')?.value;
+    const method = document.getElementById('trend-method')?.value;
+    if (bean) params.set('bean_name', bean);
+    if (grinder) params.set('grinder', grinder);
+    if (method) params.set('brew_method', method);
+    const resp = await fetch(`/api/v1/analytics/trends?${params}`);
     const data = await resp.json();
     if (trendsChart) trendsChart.destroy();
     trendsChart = new Chart(document.getElementById('trendsChart'), {
@@ -145,24 +179,25 @@ async function loadDistribution() {
     });
 }
 
+function populateSelect(selectEl, items) {
+    items.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        selectEl.appendChild(opt);
+    });
+}
+
 async function loadFilterOptions() {
     try {
         const resp = await fetch('/api/v1/analytics/filter-options');
         const data = await resp.json();
-        const beanSelect = document.getElementById('corr-bean');
-        const grinderSelect = document.getElementById('corr-grinder');
-        data.bean_names.forEach(name => {
-            const opt = document.createElement('option');
-            opt.value = name;
-            opt.textContent = name;
-            beanSelect.appendChild(opt);
-        });
-        data.grinders.forEach(name => {
-            const opt = document.createElement('option');
-            opt.value = name;
-            opt.textContent = name;
-            grinderSelect.appendChild(opt);
-        });
+        populateSelect(document.getElementById('corr-bean'), data.bean_names);
+        populateSelect(document.getElementById('corr-grinder'), data.grinders);
+        populateSelect(document.getElementById('corr-method'), data.brew_methods);
+        populateSelect(document.getElementById('trend-bean'), data.bean_names);
+        populateSelect(document.getElementById('trend-grinder'), data.grinders);
+        populateSelect(document.getElementById('trend-method'), data.brew_methods);
     } catch (e) {
         console.error('Failed to load filter options:', e);
     }
@@ -174,9 +209,11 @@ async function loadCorrelations() {
         const y = document.getElementById('corr-y').value;
         const bean = document.getElementById('corr-bean').value;
         const grinder = document.getElementById('corr-grinder').value;
+        const method = document.getElementById('corr-method').value;
         let url = `/api/v1/analytics/correlations?x=${x}&y=${y}`;
         if (bean) url += `&bean_name=${encodeURIComponent(bean)}`;
         if (grinder) url += `&grinder=${encodeURIComponent(grinder)}`;
+        if (method) url += `&brew_method=${encodeURIComponent(method)}`;
         const resp = await fetch(url);
         if (!resp.ok) { console.error('Correlation fetch failed:', resp.status); return; }
         const data = await resp.json();
@@ -229,9 +266,8 @@ async function loadRoasterDist() {
 }
 
 // Load all on page ready
-loadTrends();
 loadDistribution();
-loadFilterOptions().then(() => loadCorrelations());
 loadRoasterDist();
+loadFilterOptions().then(() => { loadTrends(); loadCorrelations(); });
 </script>
 {% endblock %}
