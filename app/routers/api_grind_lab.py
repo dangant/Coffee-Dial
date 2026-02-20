@@ -15,8 +15,8 @@ async def analyze_grind(
     image: UploadFile = File(...),
     threshold: float = Form(58.8),
     pixel_scale: float = Form(0.0),
-    max_cluster_axis: int = Form(500),
-    min_surface: int = Form(4),
+    max_cluster_axis: int = Form(100),
+    min_surface: int = Form(5),
     min_roundness: float = Form(0.0),
     max_dimension: int = Form(2000),
 ):

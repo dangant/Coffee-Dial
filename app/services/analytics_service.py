@@ -29,6 +29,12 @@ def get_summary(db: Session) -> dict:
         .order_by(func.avg(Rating.overall_score).desc())
         .first()
     )
+    avg_flavor_accuracy = (
+        db.query(func.avg(Rating.flavor_notes_accuracy))
+        .filter(Rating.flavor_notes_accuracy.isnot(None))
+        .scalar()
+    )
+    avg_flavor_accuracy = round(avg_flavor_accuracy, 1) if avg_flavor_accuracy else None
 
     return {
         "total_brews": total_brews,
@@ -41,6 +47,7 @@ def get_summary(db: Session) -> dict:
         }
         if highest_rated
         else None,
+        "avg_flavor_accuracy": avg_flavor_accuracy,
     }
 
 

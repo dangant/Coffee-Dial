@@ -10,6 +10,7 @@ class RatingBase(BaseModel):
     aroma: float | None = Field(default=None, ge=1, le=5)
     aftertaste: float | None = Field(default=None, ge=1, le=5)
     flavor_notes_experienced: str | None = None
+    flavor_notes_accuracy: float | None = None
     comments: str | None = None
 
 
@@ -26,6 +27,7 @@ class RatingUpdate(BaseModel):
     aroma: float | None = Field(default=None, ge=1, le=5)
     aftertaste: float | None = Field(default=None, ge=1, le=5)
     flavor_notes_experienced: str | None = None
+    flavor_notes_accuracy: float | None = None
     comments: str | None = None
 
 

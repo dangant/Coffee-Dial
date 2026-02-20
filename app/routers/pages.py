@@ -23,6 +23,16 @@ router = APIRouter(tags=["pages"])
 templates = Jinja2Templates(directory="app/templates")
 
 
+def _parse_time_seconds(value: str) -> int | None:
+    """Parse a time string as plain seconds (e.g. '254') or m:ss (e.g. '4:14')."""
+    if not value:
+        return None
+    if ":" in value:
+        parts = value.split(":", 1)
+        return int(parts[0]) * 60 + int(parts[1])
+    return int(value)
+
+
 def _get_lookups(db: Session) -> dict:
     return {
         "flavor_notes": lookup_service.list_flavor_notes(db),
@@ -62,11 +72,16 @@ def brew_list(
 
 @router.get("/brews/new", response_class=HTMLResponse)
 def new_brew_form(request: Request, db: Session = Depends(get_db)):
-    tpl_list = template_service.list_templates(db)
     lookups = _get_lookups(db)
-    return templates.TemplateResponse("brew_form.html", {
-        "request": request, "templates_list": tpl_list, "brew": None, **lookups,
-    })
+    recent = brew_service.list_brews(db, limit=1)
+    last_brew = recent[0] if recent else None
+    ctx = {
+        "request": request, "brew": None, "last_brew": last_brew,
+        "today": date.today().isoformat(), **lookups,
+    }
+    if not last_brew:
+        ctx["templates_list"] = template_service.list_templates(db)
+    return templates.TemplateResponse("brew_form.html", ctx)
 
 
 @router.post("/brews/new")
@@ -130,7 +145,7 @@ def create_brew_form(
         water_temp_c=temp_c,
         brew_method=brew_method,
         brew_device=brew_device or None,
-        brew_time_seconds=int(brew_time_seconds) if brew_time_seconds else None,
+        brew_time_seconds=_parse_time_seconds(brew_time_seconds),
         water_filter_type=water_filter_type or None,
         altitude_ft=int(altitude_ft) if altitude_ft else None,
         notes=notes or None,
@@ -160,7 +175,7 @@ def edit_brew_form(request: Request, brew_id: int, db: Session = Depends(get_db)
         return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
     lookups = _get_lookups(db)
     return templates.TemplateResponse("brew_form.html", {
-        "request": request, "brew": brew, "templates_list": None, **lookups,
+        "request": request, "brew": brew, "templates_list": None, "last_brew": None, **lookups,
     })
 
 
@@ -225,7 +240,7 @@ def update_brew_form(
         water_temp_c=temp_c,
         brew_method=brew_method,
         brew_device=brew_device or None,
-        brew_time_seconds=int(brew_time_seconds) if brew_time_seconds else None,
+        brew_time_seconds=_parse_time_seconds(brew_time_seconds),
         water_filter_type=water_filter_type or None,
         altitude_ft=int(altitude_ft) if altitude_ft else None,
         notes=notes or None,
@@ -246,10 +261,21 @@ def submit_rating(
     body: str = Form(""),
     aroma: str = Form(""),
     aftertaste: str = Form(""),
+    flavor_notes_confirmed: list[str] = Form([]),
     flavor_notes_experienced: str = Form(""),
     comments: str = Form(""),
     db: Session = Depends(get_db),
 ):
+    # Calculate flavor accuracy from confirmed checkboxes
+    brew = brew_service.get_brew(db, brew_id)
+    flavor_accuracy = None
+    confirmed_str = ", ".join(flavor_notes_confirmed) if flavor_notes_confirmed else None
+    if brew and brew.flavor_notes_expected:
+        expected = [n.strip() for n in brew.flavor_notes_expected.split(",") if n.strip()]
+        if expected:
+            confirmed_count = len(flavor_notes_confirmed)
+            flavor_accuracy = round(confirmed_count / len(expected) * 100, 1)
+
     data = RatingCreate(
         overall_score=overall_score,
         bitterness=float(bitterness) if bitterness else None,
@@ -258,7 +284,8 @@ def submit_rating(
         body=float(body) if body else None,
         aroma=float(aroma) if aroma else None,
         aftertaste=float(aftertaste) if aftertaste else None,
-        flavor_notes_experienced=flavor_notes_experienced or None,
+        flavor_notes_experienced=confirmed_str or flavor_notes_experienced or None,
+        flavor_notes_accuracy=flavor_accuracy,
         comments=comments or None,
     )
     existing = rating_service.get_rating(db, brew_id)
@@ -351,7 +378,7 @@ def create_template_form(
         water_temp_c=temp_c,
         brew_method=brew_method or None,
         brew_device=brew_device or None,
-        brew_time_seconds=int(brew_time_seconds) if brew_time_seconds else None,
+        brew_time_seconds=_parse_time_seconds(brew_time_seconds),
         water_filter_type=water_filter_type or None,
         altitude_ft=int(altitude_ft) if altitude_ft else None,
         notes=notes or None,
@@ -431,7 +458,7 @@ def update_template_form(
         water_temp_c=temp_c,
         brew_method=brew_method or None,
         brew_device=brew_device or None,
-        brew_time_seconds=int(brew_time_seconds) if brew_time_seconds else None,
+        brew_time_seconds=_parse_time_seconds(brew_time_seconds),
         water_filter_type=water_filter_type or None,
         altitude_ft=int(altitude_ft) if altitude_ft else None,
         notes=notes or None,
@@ -444,6 +471,12 @@ def update_template_form(
 def delete_template_page(template_id: int, db: Session = Depends(get_db)):
     template_service.delete_template(db, template_id)
     return RedirectResponse("/templates", status_code=303)
+
+
+@router.post("/brews/{brew_id}/dial-template")
+def dial_template(brew_id: int, db: Session = Depends(get_db)):
+    template_service.update_template_from_brew(db, brew_id)
+    return RedirectResponse(f"/brews/{brew_id}", status_code=303)
 
 
 @router.post("/brews/{brew_id}/save-template")

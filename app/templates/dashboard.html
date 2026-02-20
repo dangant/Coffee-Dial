@@ -23,6 +23,10 @@
         <div class="value">{{ summary.top_bean or "—" }}</div>
         <div class="label">Most Brewed</div>
     </div>
+    <div class="stat-card">
+        <div class="value">{{ (summary.avg_flavor_accuracy ~ '%') if summary.avg_flavor_accuracy else '—' }}</div>
+        <div class="label">Flavor Accuracy</div>
+    </div>
 </div>
 
 <div class="card">
@@ -35,6 +39,8 @@
                 <th>Roaster</th>
                 <th>Bean</th>
                 <th>Method</th>
+                <th>Grind</th>
+                <th>Grinder</th>
                 <th>Score</th>
             </tr>
         </thead>
@@ -45,6 +51,8 @@
                 <td>{{ brew.roaster }}</td>
                 <td>{{ brew.bean_name }}</td>
                 <td>{{ brew.brew_method }}</td>
+                <td>{{ brew.grind_setting or '—' }}</td>
+                <td>{{ brew.grinder or '—' }}</td>
                 <td>
                     {% if brew.rating %}
                         <span class="badge badge-score">{{ brew.rating.overall_score }}/10</span>

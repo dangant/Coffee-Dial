@@ -19,6 +19,7 @@ class Rating(Base):
     aroma: Mapped[float | None] = mapped_column(Float, nullable=True)
     aftertaste: Mapped[float | None] = mapped_column(Float, nullable=True)
     flavor_notes_experienced: Mapped[str | None] = mapped_column(Text, nullable=True)
+    flavor_notes_accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
     comments: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     brew: Mapped["Brew"] = relationship("Brew", back_populates="rating")

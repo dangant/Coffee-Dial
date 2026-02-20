@@ -37,6 +37,20 @@ def create_template_from_brew(db: Session, brew_id: int, name: str) -> BrewTempl
     return template
 
 
+def update_template_from_brew(db: Session, brew_id: int) -> BrewTemplate | None:
+    brew = db.query(Brew).filter(Brew.id == brew_id).first()
+    if not brew or not brew.template_id:
+        return None
+    template = db.query(BrewTemplate).filter(BrewTemplate.id == brew.template_id).first()
+    if not template:
+        return None
+    for field in TEMPLATE_FIELDS:
+        setattr(template, field, getattr(brew, field))
+    db.commit()
+    db.refresh(template)
+    return template
+
+
 def get_template(db: Session, template_id: int) -> BrewTemplate | None:
     return db.query(BrewTemplate).filter(BrewTemplate.id == template_id).first()
 

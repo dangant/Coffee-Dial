@@ -20,12 +20,22 @@
     {% endfor %}
 </div>
 
+{% if brew.flavor_notes_expected %}
+{% set expected_notes = brew.flavor_notes_expected.split(', ') %}
+{% set confirmed_notes = brew.rating.flavor_notes_experienced.split(', ') if brew.rating and brew.rating.flavor_notes_experienced else [] %}
 <div class="form-group">
-    <label>Experienced Flavor Notes</label>
-    <input type="text" name="flavor_notes_experienced"
-        value="{{ brew.rating.flavor_notes_experienced or '' if brew.rating else '' }}"
-        placeholder="What did you actually taste?">
+    <label>Did you taste these expected flavors?</label>
+    <div class="flavor-checkboxes">
+        {% for note in expected_notes %}
+        <label class="checkbox-pill">
+            <input type="checkbox" name="flavor_notes_confirmed" value="{{ note }}"
+                {{ 'checked' if note in confirmed_notes else '' }}>
+            <span>{{ note }}</span>
+        </label>
+        {% endfor %}
+    </div>
 </div>
+{% endif %}
 
 <div class="form-group">
     <label>Comments</label>

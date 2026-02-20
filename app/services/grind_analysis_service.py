@@ -1,8 +1,17 @@
 """Coffee grind particle size analysis service.
 
 Analyzes photos of coffee grounds on a white/light background to detect
-individual particles and compute size distribution statistics. Algorithm
-inspired by coffeegrindsize (https://github.com/csatt/coffeegrindsize).
+individual particles and compute size distribution statistics.
+
+Algorithm faithfully reimplemented from coffeegrindsize.py by Jonathan Gagne
+(https://github.com/csatt/coffeegrindsize). Key formulas preserved:
+- Blue channel thresholding against background median
+- 4-connectivity flood fill (quick_cluster)
+- Axis = max distance from centroid; short_axis = surface / (pi * axis)
+- Roundness = surface / (pi * axis^2)
+- Diameter = 2 * sqrt(long_axis * short_axis) (geometric mean of axes)
+- Surface brightness multiplier for sub-pixel grounds
+- Volume = pi * short_axis^2 * axis (prolate ellipsoid)
 """
 
 import base64
@@ -19,22 +28,24 @@ from PIL import Image
 @dataclass
 class AnalysisParams:
     threshold: float = 58.8  # percentage (0-100) — darkness threshold
-    pixel_scale: float = 0.0  # mm per pixel (0 = report in pixels only)
-    max_cluster_axis: int = 500  # max long axis in pixels before discarding
-    min_surface: int = 4  # minimum cluster area in pixels
+    pixel_scale: float = 0.0  # pixels per mm (0 = report in pixels only)
+    max_cluster_axis: int = 100  # max semi-major axis in pixels
+    min_surface: int = 5  # minimum cluster area in pixels
     min_roundness: float = 0.0  # 0-1, filter out elongated shapes
     max_dimension: int = 2000  # auto-downscale images larger than this
 
 
 @dataclass
 class Particle:
-    surface: int
-    long_axis: float
-    short_axis: float
-    roundness: float
-    diameter_px: float
+    surface: float  # brightness-adjusted surface area
+    long_axis: float  # semi-major axis (max dist from centroid)
+    short_axis: float  # derived: surface / (pi * long_axis)
+    roundness: float  # surface / (pi * long_axis^2)
+    diameter_px: float  # 2 * sqrt(long_axis * short_axis)
     diameter_mm: float | None
+    volume: float  # pi * short_axis^2 * long_axis
     centroid: tuple[float, float]
+    _pixels: list[tuple[int, int]] = field(default_factory=list, repr=False)
 
 
 @dataclass
@@ -60,13 +71,15 @@ def analyze_image(image_bytes: bytes, params: AnalysisParams | None = None) -> A
     width, height = img.size
     img_array = np.array(img)
 
-    mask = _compute_threshold_mask(blue, params.threshold)
+    background_median = float(np.median(blue))
+    mask = _compute_threshold_mask(blue, params.threshold, background_median)
     threshold_b64 = _generate_threshold_image(img_array, mask)
 
-    clusters = _find_clusters(mask, width, height, params)
-    particles = [_compute_particle_geometry(c, params.pixel_scale) for c in clusters]
+    particles = _find_and_measure_clusters(
+        mask, blue, width, height, background_median, params
+    )
 
-    cluster_b64 = _generate_cluster_image(img_array, clusters)
+    cluster_b64 = _generate_cluster_image(img_array, particles)
 
     diameters_px = [p.diameter_px for p in particles]
     avg_px = float(np.mean(diameters_px)) if diameters_px else 0.0
@@ -110,28 +123,36 @@ def _load_and_extract_blue_channel(
     return img, blue
 
 
-def _compute_threshold_mask(blue: np.ndarray, threshold_pct: float) -> np.ndarray:
+def _compute_threshold_mask(
+    blue: np.ndarray, threshold_pct: float, background_median: float
+) -> np.ndarray:
     """Create boolean mask of dark (coffee) pixels.
 
-    Uses the median of the blue channel as the background reference.
-    Pixels darker than (median * threshold_pct / 100) are considered coffee.
+    Matches original: mask = where(blue < background_median * threshold / 100)
     """
-    background = float(np.median(blue))
-    cutoff = background * threshold_pct / 100.0
+    cutoff = background_median * threshold_pct / 100.0
     return blue < cutoff
 
 
 def _generate_threshold_image(img_array: np.ndarray, mask: np.ndarray) -> str:
-    """Overlay red on masked pixels, return base64 JPEG."""
+    """Overlay red on masked pixels, return base64 JPEG.
+
+    Matches original: RGB = (255, 0, 0) for thresholded pixels.
+    """
     overlay = img_array.copy()
-    overlay[mask] = [220, 50, 50]
+    overlay[mask, 0] = 255
+    overlay[mask, 1] = 0
+    overlay[mask, 2] = 0
     return _array_to_b64_jpeg(overlay)
 
 
-def _flood_fill_cluster(
+def _quick_cluster(
     mask: np.ndarray, visited: np.ndarray, start_y: int, start_x: int
 ) -> list[tuple[int, int]]:
-    """BFS flood fill with 8-connectivity, returns list of (y, x) pixel coords."""
+    """4-connectivity flood fill matching original quick_cluster.
+
+    Uses Manhattan distance <= 1 (up/down/left/right only, no diagonals).
+    """
     height, width = mask.shape
     queue = deque()
     queue.append((start_y, start_x))
@@ -141,141 +162,168 @@ def _flood_fill_cluster(
     while queue:
         y, x = queue.popleft()
         pixels.append((y, x))
-        for dy in (-1, 0, 1):
-            for dx in (-1, 0, 1):
-                if dy == 0 and dx == 0:
-                    continue
-                ny, nx = y + dy, x + dx
-                if 0 <= ny < height and 0 <= nx < width and not visited[ny, nx] and mask[ny, nx]:
-                    visited[ny, nx] = True
-                    queue.append((ny, nx))
+        for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < height and 0 <= nx < width and not visited[ny, nx] and mask[ny, nx]:
+                visited[ny, nx] = True
+                queue.append((ny, nx))
 
     return pixels
 
 
-def _find_clusters(
-    mask: np.ndarray, width: int, height: int, params: AnalysisParams
-) -> list[list[tuple[int, int]]]:
-    """Find all connected clusters of masked pixels, filtering by params."""
+def _find_and_measure_clusters(
+    mask: np.ndarray,
+    blue: np.ndarray,
+    width: int,
+    height: int,
+    background_median: float,
+    params: AnalysisParams,
+) -> list[Particle]:
+    """Find all connected clusters and compute particle geometry.
+
+    Matches the original launch_psd flow:
+    1. Flood fill to find clusters (4-connectivity)
+    2. Filter by surface, edge, axis, roundness
+    3. Compute geometry matching original formulas
+    """
     visited = np.zeros_like(mask, dtype=bool)
-    clusters = []
-    edge_margin = 2
+    particles = []
 
     for y in range(height):
         for x in range(width):
             if mask[y, x] and not visited[y, x]:
-                pixels = _flood_fill_cluster(mask, visited, y, x)
+                pixels = _quick_cluster(mask, visited, y, x)
 
-                # Filter by minimum surface
+                # Filter by minimum surface (raw pixel count, before brightness adjustment)
                 if len(pixels) < params.min_surface:
                     continue
 
-                # Filter edge-touching clusters
-                ys = [p[0] for p in pixels]
-                xs = [p[1] for p in pixels]
-                if min(ys) <= edge_margin or max(ys) >= height - edge_margin - 1:
+                ys = np.array([p[0] for p in pixels], dtype=float)
+                xs = np.array([p[1] for p in pixels], dtype=float)
+
+                # Avoid image edges (matches original: min <= 0 or max >= size-1)
+                if ys.min() <= 0 or ys.max() >= height - 1:
                     continue
-                if min(xs) <= edge_margin or max(xs) >= width - edge_margin - 1:
+                if xs.min() <= 0 or xs.max() >= width - 1:
                     continue
 
+                # Centroid
+                xmean = float(np.mean(ys))
+                ymean = float(np.mean(xs))
+
+                # Semi-major axis = max distance from centroid
+                # (matches original: dlist = sqrt((x-xmean)^2 + (y-ymean)^2), axis = max(dlist))
+                dists = np.sqrt((ys - xmean) ** 2 + (xs - ymean) ** 2)
+                dists = np.maximum(dists, 1e-4)
+                long_axis = float(np.max(dists))
+
                 # Filter by max cluster axis
-                long_axis = max(max(ys) - min(ys), max(xs) - min(xs))
                 if long_axis > params.max_cluster_axis:
                     continue
 
+                # Brightness-adjusted surface multiplier
+                # (matches original: surface_multiplier = (median - min_blue) / median, clamped >= 1)
+                pixel_blues = blue[ys.astype(int), xs.astype(int)].astype(float)
+                surface_multiplier = (background_median - pixel_blues.min()) / background_median
+                surface_multiplier = max(surface_multiplier, 1.0)
+                surface = float(len(pixels)) * surface_multiplier
+
+                # Roundness = surface / (pi * axis^2)
+                # (matches original formula)
+                if surface == 1:
+                    roundness = 1.0
+                else:
+                    roundness = surface / (math.pi * long_axis ** 2)
+
                 # Filter by roundness
-                if params.min_roundness > 0:
-                    short_axis = min(max(ys) - min(ys), max(xs) - min(xs))
-                    roundness = (short_axis / long_axis) if long_axis > 0 else 1.0
-                    if roundness < params.min_roundness:
-                        continue
+                if roundness < params.min_roundness:
+                    continue
 
-                clusters.append(pixels)
+                # Short axis = surface / (pi * axis)
+                short_axis = surface / (math.pi * long_axis)
 
-    return clusters
+                # Volume = pi * short_axis^2 * axis (prolate ellipsoid)
+                volume = math.pi * short_axis ** 2 * long_axis
 
+                # Diameter = 2 * sqrt(long_axis * short_axis) (geometric mean)
+                diameter_px = 2.0 * math.sqrt(long_axis * short_axis)
+                diameter_mm = (diameter_px / params.pixel_scale) if params.pixel_scale > 0 else None
 
-def _compute_particle_geometry(
-    pixels: list[tuple[int, int]], pixel_scale: float
-) -> Particle:
-    """Compute geometry for a single particle cluster."""
-    ys = [p[0] for p in pixels]
-    xs = [p[1] for p in pixels]
+                particles.append(Particle(
+                    surface=round(surface, 2),
+                    long_axis=round(long_axis, 2),
+                    short_axis=round(short_axis, 2),
+                    roundness=round(roundness, 3),
+                    diameter_px=round(diameter_px, 2),
+                    diameter_mm=round(diameter_mm, 3) if diameter_mm is not None else None,
+                    volume=round(volume, 2),
+                    centroid=(round(ymean, 1), round(xmean, 1)),
+                    _pixels=pixels,
+                ))
 
-    surface = len(pixels)
-    cy = sum(ys) / len(ys)
-    cx = sum(xs) / len(xs)
-
-    span_y = max(ys) - min(ys) + 1
-    span_x = max(xs) - min(xs) + 1
-    long_axis = float(max(span_y, span_x))
-    short_axis = float(min(span_y, span_x))
-    roundness = (short_axis / long_axis) if long_axis > 0 else 1.0
-
-    # Equivalent diameter: diameter of circle with same area
-    diameter_px = 2.0 * math.sqrt(surface / math.pi)
-    diameter_mm = diameter_px * pixel_scale if pixel_scale > 0 else None
-
-    return Particle(
-        surface=surface,
-        long_axis=round(long_axis, 2),
-        short_axis=round(short_axis, 2),
-        roundness=round(roundness, 3),
-        diameter_px=round(diameter_px, 2),
-        diameter_mm=round(diameter_mm, 3) if diameter_mm is not None else None,
-        centroid=(round(cx, 1), round(cy, 1)),
-    )
+    return particles
 
 
 def _generate_cluster_image(
-    img_array: np.ndarray, clusters: list[list[tuple[int, int]]]
+    img_array: np.ndarray, particles: list[Particle]
 ) -> str:
-    """Draw colored outlines for each cluster on the original image."""
+    """Draw cluster outlines in red with blue centroids.
+
+    Matches original refresh_cluster_data: edge pixels in red (255,0,0),
+    centroid pixel in blue (80,80,255). A pixel is an edge pixel if it
+    has fewer than 9 neighbors (including itself) in the cluster.
+    """
     overlay = img_array.copy()
-    height, width = overlay.shape[:2]
 
-    # Generate distinct colors for clusters
-    rng = np.random.RandomState(42)
-    colors = []
-    for _ in range(max(len(clusters), 1)):
-        colors.append(rng.randint(60, 255, size=3).tolist())
+    for p in particles:
+        pixel_set = set(p._pixels)
+        ys = np.array([pt[0] for pt in p._pixels])
+        xs = np.array([pt[1] for pt in p._pixels])
 
-    for i, pixels in enumerate(clusters):
-        color = colors[i % len(colors)]
-        pixel_set = set(pixels)
-        for y, x in pixels:
-            # Check if this pixel is on the border of the cluster
-            is_border = False
+        for idx in range(len(p._pixels)):
+            y, x = ys[idx], xs[idx]
+            # Count neighbors (including self) within abs distance <= 1
+            # Matches original: np.where((abs(x-x[l])<=1) & (abs(y-y[l])<=1))
+            neighbor_count = 0
             for dy in (-1, 0, 1):
                 for dx in (-1, 0, 1):
-                    if dy == 0 and dx == 0:
-                        continue
-                    ny, nx = y + dy, x + dx
-                    if (ny, nx) not in pixel_set:
-                        is_border = True
-                        break
-                if is_border:
-                    break
-            if is_border:
-                overlay[y, x] = color
+                    if (y + dy, x + dx) in pixel_set:
+                        neighbor_count += 1
+            # Skip if fully surrounded (9 neighbors = interior pixel)
+            if neighbor_count == 9:
+                continue
+            # Mark edge pixel in red
+            overlay[y, x] = [255, 0, 0]
+
+        # Mark centroid in blue
+        cy = int(round(p.centroid[1]))
+        cx = int(round(p.centroid[0]))
+        if 0 <= cy < overlay.shape[0] and 0 <= cx < overlay.shape[1]:
+            overlay[cy, cx] = [80, 80, 255]
 
     return _array_to_b64_jpeg(overlay)
 
 
 def _build_histogram_data(particles: list[Particle], pixel_scale: float) -> dict:
-    """Build histogram data for Chart.js (log-scale bins)."""
-    if not particles:
-        return {"labels": [], "counts": [], "mass_weighted": []}
+    """Build histogram data for Chart.js (log-scale bins).
 
-    diameters = [p.diameter_px for p in particles]
+    Uses volume-weighted (mass) histogram matching original "Mass vs Diameter".
+    """
+    if not particles:
+        return {"labels": [], "counts": [], "mass_weighted": [], "unit": "px"}
+
     use_mm = pixel_scale > 0
     if use_mm:
         diameters = [p.diameter_mm for p in particles]
+    else:
+        diameters = [p.diameter_px for p in particles]
+
+    volumes = [p.volume for p in particles]
 
     d_min = max(min(diameters), 0.1)
     d_max = max(diameters)
 
-    # Log-scale bins
+    # Log-scale bins (matches original logspace approach)
     num_bins = min(30, max(10, int(math.sqrt(len(diameters)))))
     bin_edges = np.logspace(np.log10(d_min * 0.9), np.log10(d_max * 1.1), num_bins + 1)
 
@@ -284,16 +332,15 @@ def _build_histogram_data(particles: list[Particle], pixel_scale: float) -> dict
     labels = []
 
     for i in range(num_bins):
-        lo, hi = bin_edges[i], bin_edges[i + 1]
+        lo, hi = float(bin_edges[i]), float(bin_edges[i + 1])
         unit = "mm" if use_mm else "px"
         labels.append(f"{lo:.1f}-{hi:.1f} {unit}")
-        for d in diameters:
+        for j, d in enumerate(diameters):
             if lo <= d < hi or (i == num_bins - 1 and d == hi):
                 counts[i] += 1
-                # Mass proportional to d^3
-                mass_weighted[i] += d ** 3
+                mass_weighted[i] += volumes[j]
 
-    # Normalize mass-weighted to percentage
+    # Normalize mass-weighted to fraction (matches original: weights/sum(weights))
     total_mass = sum(mass_weighted) if sum(mass_weighted) > 0 else 1
     mass_weighted = [round(m / total_mass * 100, 2) for m in mass_weighted]
 
@@ -310,14 +357,15 @@ def _build_csv(particles: list[Particle]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "particle_id", "surface_px", "long_axis", "short_axis",
-        "roundness", "diameter_px", "diameter_mm", "centroid_x", "centroid_y",
+        "particle_id", "surface", "long_axis", "short_axis",
+        "roundness", "diameter_px", "diameter_mm", "volume",
+        "centroid_x", "centroid_y",
     ])
     for i, p in enumerate(particles, 1):
         writer.writerow([
             i, p.surface, p.long_axis, p.short_axis,
             p.roundness, p.diameter_px, p.diameter_mm or "",
-            p.centroid[0], p.centroid[1],
+            p.volume, p.centroid[0], p.centroid[1],
         ])
     return output.getvalue()
 
