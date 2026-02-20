@@ -9,7 +9,7 @@ from app.config import settings
 templates = Jinja2Templates(directory="app/templates")
 serializer = URLSafeSerializer(settings.secret_key, salt="auth")
 
-COOKIE_NAME = "session"
+COOKIE_NAME = "coffee_session"
 EXCLUDED_PREFIXES = ("/login", "/static", "/health")
 
 router = APIRouter()
@@ -25,7 +25,8 @@ def login_submit(request: Request, password: str = Form(...)):
     if password == settings.app_password:
         token = serializer.dumps("authenticated")
         response = RedirectResponse(url="/", status_code=303)
-        response.set_cookie(COOKIE_NAME, token, httponly=True, samesite="lax")
+        is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+        response.set_cookie(COOKIE_NAME, token, httponly=True, samesite="lax", secure=is_https)
         return response
     return templates.TemplateResponse(
         "login.html", {"request": request, "error": "Wrong password"}, status_code=401
