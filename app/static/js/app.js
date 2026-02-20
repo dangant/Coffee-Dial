@@ -143,19 +143,15 @@ function limitCheckboxes(checkbox, max) {
     const checked = document.querySelectorAll('[name="flavor_notes_expected"]:checked');
     if (checked.length > max) {
         checkbox.checked = false;
-        return;
     }
     enforceCheckboxLimit(max);
 }
 
 function enforceCheckboxLimit(max) {
     const checked = document.querySelectorAll('[name="flavor_notes_expected"]:checked');
-    const unchecked = document.querySelectorAll('[name="flavor_notes_expected"]:not(:checked)');
-    if (checked.length >= max) {
-        unchecked.forEach(cb => cb.disabled = true);
-    } else {
-        unchecked.forEach(cb => cb.disabled = false);
-    }
+    const all = document.querySelectorAll('[name="flavor_notes_expected"]');
+    // Always enable all checkboxes — the limitCheckboxes handler prevents exceeding max
+    all.forEach(cb => cb.disabled = false);
 }
 
 // Inline add flavor note via API (no form submission)

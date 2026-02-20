@@ -73,10 +73,8 @@ def brew_list(
 @router.get("/brews/new", response_class=HTMLResponse)
 def new_brew_form(request: Request, db: Session = Depends(get_db)):
     lookups = _get_lookups(db)
-    recent = brew_service.list_brews(db, limit=1)
-    last_brew = recent[0] if recent else None
     ctx = {
-        "request": request, "brew": None, "last_brew": last_brew,
+        "request": request, "brew": None, "last_brew": None,
         "today": date.today().isoformat(),
         "templates_list": template_service.list_templates(db),
         **lookups,
