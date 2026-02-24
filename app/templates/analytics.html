@@ -293,11 +293,33 @@ async function loadRoasterDist() {
 
 let lpChart;
 
+// Inline Chart.js plugin: draws text labels next to special points
+const pointLabelPlugin = {
+    id: 'pointLabelPlugin',
+    afterDatasetsDraw(chart) {
+        const ctx = chart.ctx;
+        chart.data.datasets.forEach((dataset, i) => {
+            if (!dataset._pointLabels) return;
+            const meta = chart.getDatasetMeta(i);
+            meta.data.forEach((pt, j) => {
+                const lines = dataset._pointLabels[j];
+                if (!lines) return;
+                ctx.save();
+                ctx.font = 'bold 11px sans-serif';
+                ctx.fillStyle = '#333';
+                lines.forEach((line, k) => {
+                    ctx.fillText(line, pt.x + 10, pt.y - 6 + k * 14);
+                });
+                ctx.restore();
+            });
+        });
+    }
+};
+
 async function populateLPBeans() {
     const resp = await fetch('/api/v1/shelf/beans');
     const beans = await resp.json();
     const sel = document.getElementById('lp-bean-filter');
-    // Remove all options except "All Beans"
     while (sel.options.length > 1) sel.remove(1);
     beans.forEach(b => {
         const opt = document.createElement('option');
@@ -312,35 +334,48 @@ async function loadLP() {
     const url = beanFilter ? `/api/v1/shelf/lp?bean_name=${encodeURIComponent(beanFilter)}` : '/api/v1/shelf/lp';
     const resp = await fetch(url);
     const d = await resp.json();
-    const label = beanFilter ? `"${beanFilter}"` : 'all tracked beans';
+    const W = d.total_remaining_grams;
 
-    // Summary chips
-    document.getElementById('lp-summary').innerHTML = `
-        <div class="stat-card" style="flex:1; min-width:120px; padding:0.5rem 1rem;">
-            <div class="value" style="font-size:1.4rem;">${d.total_remaining_grams}g</div>
-            <div class="label">Remaining (${beanFilter || 'All'})</div>
+    // Pre-compute all three scenarios with leftovers
+    const espLeft  = +(W - d.optimal_espressos * 18).toFixed(1);
+    const poLeft   = +(W - d.max_pour_overs * 25).toFixed(1);
+    const equalN   = Math.floor(W / (25 + 18));
+    const eqLeft   = +(W - equalN * 25 - equalN * 18).toFixed(1);
+    const totalEspCups = d.optimal_espressos;
+    const totalPoCups  = d.max_pour_overs;
+    const totalEqCups  = equalN * 2;
+
+    // Summary: all three scenarios side by side
+    document.getElementById('lp-summary').innerHTML = W > 0 ? `
+        <div class="stat-card" style="flex:1; min-width:110px; padding:0.5rem 1rem;">
+            <div class="value" style="font-size:1.4rem;">${W}g</div>
+            <div class="label">Beans Remaining</div>
         </div>
-        <div class="stat-card" style="flex:1; min-width:120px; padding:0.5rem 1rem;">
-            <div class="value" style="font-size:1.4rem;">${d.max_pour_overs}</div>
-            <div class="label">Max Pour Overs</div>
+        <div class="stat-card" style="flex:1; min-width:130px; padding:0.5rem 1rem; border-left:3px solid #6b4423;">
+            <div class="value" style="font-size:1.4rem;">★ ${totalEspCups} cups</div>
+            <div class="label">All Espresso &mdash; ${espLeft}g left</div>
         </div>
-        <div class="stat-card" style="flex:1; min-width:120px; padding:0.5rem 1rem;">
-            <div class="value" style="font-size:1.4rem;">${d.max_espressos}</div>
-            <div class="label">Max Espressos</div>
+        <div class="stat-card" style="flex:1; min-width:130px; padding:0.5rem 1rem;">
+            <div class="value" style="font-size:1.4rem;">${totalPoCups} cups</div>
+            <div class="label">All Pour Over &mdash; ${poLeft}g left</div>
         </div>
-        <div class="stat-card" style="flex:1; min-width:120px; padding:0.5rem 1rem; border-left:3px solid #6b4423;">
-            <div class="value" style="font-size:1.4rem;">${d.optimal_espressos}</div>
-            <div class="label">Optimal (Max Cups)</div>
+        <div class="stat-card" style="flex:1; min-width:130px; padding:0.5rem 1rem;">
+            <div class="value" style="font-size:1.4rem;">${equalN}+${equalN} cups</div>
+            <div class="label">Equal Split &mdash; ${eqLeft}g left</div>
+        </div>
+    ` : `
+        <div class="stat-card" style="flex:1; min-width:110px; padding:0.5rem 1rem;">
+            <div class="value" style="font-size:1.4rem;">0g</div>
+            <div class="label">Beans Remaining</div>
         </div>
     `;
 
-    // Recommendation text
-    document.getElementById('lp-recommendation').innerHTML = d.total_remaining_grams > 0
-        ? `<strong>Optimal for ${label}:</strong> With <strong>${d.total_remaining_grams}g</strong> remaining,
-           make <strong>${d.optimal_espressos} espressos</strong> to maximize total cups,
-           or up to <strong>${d.max_pour_overs} pour overs</strong>.
-           Any point on the trade-off line is a valid allocation.`
-        : `<strong>No inventory tracked${beanFilter ? ` for "${beanFilter}"` : ''}.</strong>
+    // Recommendation
+    document.getElementById('lp-recommendation').innerHTML = W > 0
+        ? `<strong>Optimal (max cups):</strong> ${totalEspCups} espressos uses ${(totalEspCups*18).toFixed(0)}g, leaving <strong>${espLeft}g</strong>.
+           &nbsp;|&nbsp; All pour over: ${totalPoCups} cups, <strong>${poLeft}g</strong> left.
+           &nbsp;|&nbsp; Equal split: ${equalN} of each (${totalEqCups} total), <strong>${eqLeft}g</strong> left.`
+        : `<strong>No inventory tracked${beanFilter ? ` for &ldquo;${beanFilter}&rdquo;` : ''}.</strong>
            Visit <a href="/shelf">On the Shelf</a> to enter your bean inventory.`;
 
     // Per-bean breakdown
@@ -349,15 +384,22 @@ async function loadLP() {
             <details>
                 <summary style="cursor:pointer; font-weight:600; color:#6b4423;">Bean Breakdown</summary>
                 <table class="brew-table" style="margin-top:0.5rem;">
-                    <thead><tr><th>Bean</th><th>Roaster</th><th>Remaining</th><th>Max Espressos</th><th>Max Pour Overs</th></tr></thead>
+                    <thead><tr><th>Bean</th><th>Roaster</th><th>Remaining</th><th>Max Espressos</th><th>Leftover</th><th>Max Pour Overs</th><th>Leftover</th></tr></thead>
                     <tbody>
-                        ${d.breakdown.map(b => `<tr>
-                            <td>${b.bean_name}</td>
-                            <td>${b.roaster || '—'}</td>
-                            <td>${b.remaining_grams != null ? b.remaining_grams + 'g' : '—'}</td>
-                            <td>${b.remaining_grams != null ? Math.floor(b.remaining_grams / 18) : '—'}</td>
-                            <td>${b.remaining_grams != null ? Math.floor(b.remaining_grams / 25) : '—'}</td>
-                        </tr>`).join('')}
+                        ${d.breakdown.map(b => {
+                            const r = b.remaining_grams;
+                            const maxE = r != null ? Math.floor(r / 18) : null;
+                            const maxP = r != null ? Math.floor(r / 25) : null;
+                            return `<tr>
+                                <td>${b.bean_name}</td>
+                                <td>${b.roaster || '—'}</td>
+                                <td>${r != null ? r + 'g' : '—'}</td>
+                                <td>${maxE != null ? maxE : '—'}</td>
+                                <td>${maxE != null ? (r - maxE*18).toFixed(1)+'g' : '—'}</td>
+                                <td>${maxP != null ? maxP : '—'}</td>
+                                <td>${maxP != null ? (r - maxP*25).toFixed(1)+'g' : '—'}</td>
+                            </tr>`;
+                        }).join('')}
                     </tbody>
                 </table>
             </details>`;
@@ -366,17 +408,17 @@ async function loadLP() {
     }
 
     if (lpChart) lpChart.destroy();
-    if (d.total_remaining_grams <= 0) return;
+    if (W <= 0) return;
 
     const tradeoffLine = d.constraint_line.map(p => ({ x: p.x, y: p.y }));
-    const equalX = Math.floor(d.total_remaining_grams / (25 + 18));
 
     lpChart = new Chart(document.getElementById('lpChart'), {
         type: 'scatter',
+        plugins: [pointLabelPlugin],
         data: {
             datasets: [
                 {
-                    label: `Trade-off boundary (25x + 18y = ${d.total_remaining_grams}g)`,
+                    label: `Trade-off line (25x + 18y = ${W}g)`,
                     data: tradeoffLine,
                     type: 'line',
                     borderColor: '#6b4423',
@@ -388,27 +430,30 @@ async function loadLP() {
                     order: 2,
                 },
                 {
-                    label: `★ Optimal: ${d.optimal_espressos} espressos (max cups)`,
+                    label: `★ All Espresso: ${totalEspCups} cups (${espLeft}g left)`,
                     data: [{ x: 0, y: d.optimal_espressos }],
                     backgroundColor: '#6b4423',
                     pointRadius: 10,
                     pointStyle: 'star',
                     order: 1,
+                    _pointLabels: [[`★ ${totalEspCups} esp`, `${espLeft}g left`]],
                 },
                 {
-                    label: `All Pour Over: ${d.max_pour_overs} cups`,
+                    label: `All Pour Over: ${totalPoCups} cups (${poLeft}g left)`,
                     data: [{ x: d.max_pour_overs, y: 0 }],
                     backgroundColor: '#d4a574',
                     pointRadius: 8,
                     order: 1,
+                    _pointLabels: [[`${totalPoCups} po`, `${poLeft}g left`]],
                 },
                 {
-                    label: `Equal split: ${equalX} each`,
-                    data: [{ x: equalX, y: equalX }],
+                    label: `Equal Split: ${equalN}+${equalN} cups (${eqLeft}g left)`,
+                    data: [{ x: equalN, y: equalN }],
                     backgroundColor: '#8b5e3c',
                     pointRadius: 8,
                     pointStyle: 'rect',
                     order: 1,
+                    _pointLabels: [[`${equalN}+${equalN}`, `${eqLeft}g left`]],
                 },
             ]
         },
@@ -419,23 +464,44 @@ async function loadLP() {
                 x: {
                     title: { display: true, text: 'Pour Overs (cups)' },
                     min: 0,
-                    suggestedMax: Math.ceil(d.max_pour_overs * 1.1) + 1,
+                    suggestedMax: Math.ceil(d.max_pour_overs * 1.15) + 1,
                 },
                 y: {
                     title: { display: true, text: 'Espressos (cups)' },
                     min: 0,
-                    suggestedMax: Math.ceil(d.max_espressos * 1.1) + 1,
+                    suggestedMax: Math.ceil(d.max_espressos * 1.15) + 1,
                 }
             },
             plugins: {
                 legend: { display: true },
                 tooltip: {
                     callbacks: {
+                        title: () => '',
                         label: (ctx) => {
+                            const px = ctx.parsed.x;
+                            const py = ctx.parsed.y;
                             if (ctx.datasetIndex === 0) {
-                                return `${ctx.parsed.x.toFixed(0)} pour overs + ${ctx.parsed.y.toFixed(0)} espressos`;
+                                // Constraint line: floor to integer cups
+                                const x = Math.floor(px);
+                                const y = Math.floor(py);
+                                const used = x * 25 + y * 18;
+                                const left = (W - used).toFixed(1);
+                                return [
+                                    `${x} pour over${x !== 1 ? 's' : ''} + ${y} espresso${y !== 1 ? 's' : ''}`,
+                                    `Beans used: ${used}g`,
+                                    `Beans left over: ${left}g`,
+                                ];
                             }
-                            return ctx.dataset.label;
+                            // Key points: exact integer values
+                            const x = Math.round(px);
+                            const y = Math.round(py);
+                            const used = x * 25 + y * 18;
+                            const left = (W - used).toFixed(1);
+                            return [
+                                ctx.dataset.label.replace(/\(.*\)/, '').trim(),
+                                `Beans used: ${used}g`,
+                                `Beans left over: ${left}g`,
+                            ];
                         }
                     }
                 }
