@@ -3,27 +3,63 @@
 {% block content %}
 <div class="page-header">
     <h1>On the Shelf</h1>
-    <p style="color: var(--text-muted, #888); margin-top: 0.25rem;">Track your bean inventory. Every brew deducts from your stash.</p>
+    <p style="color: var(--text-muted, #888); margin-top: 0.25rem;">Track beans by type. Every brew deducts automatically.</p>
 </div>
 
 <div id="shelf-summary" class="stat-grid" style="margin-bottom: 1.5rem;"></div>
 
-<div class="card">
-    <table class="brew-table" id="shelf-table">
+<!-- Add / update a bean -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <h2 style="margin-top:0;">Add or Update a Bean</h2>
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
+        <div class="form-group" style="flex:2; min-width:160px; margin:0;">
+            <label>Bean Name</label>
+            <input type="text" id="add-bean" list="bean-suggestions" placeholder="e.g. Yirgacheffe">
+            <datalist id="bean-suggestions"></datalist>
+        </div>
+        <div class="form-group" style="flex:2; min-width:140px; margin:0;">
+            <label>Roaster</label>
+            <input type="text" id="add-roaster" list="roaster-suggestions" placeholder="e.g. Blue Bottle">
+            <datalist id="roaster-suggestions"></datalist>
+        </div>
+        <div class="form-group" style="flex:1; min-width:110px; margin:0;">
+            <label>Grams on Shelf</label>
+            <input type="number" id="add-grams" min="0" step="0.1" placeholder="e.g. 250">
+        </div>
+        <button class="btn" style="margin-bottom:0;" onclick="addEntry()">Save</button>
+    </div>
+    <p id="add-msg" style="margin:0.5rem 0 0; font-size:0.85rem; color:#888;"></p>
+</div>
+
+<!-- Tracked beans -->
+<div class="card" id="tracked-card">
+    <h2 style="margin-top:0;">Tracked Beans</h2>
+    <table class="brew-table" id="tracked-table">
         <thead>
             <tr>
-                <th>Template</th>
                 <th>Bean</th>
-                <th>Method</th>
-                <th>On Shelf (g)</th>
+                <th>Roaster</th>
+                <th>Stocked (g)</th>
                 <th>Used (g)</th>
                 <th>Remaining (g)</th>
                 <th></th>
             </tr>
         </thead>
-        <tbody id="shelf-body">
-            <tr><td colspan="7" style="text-align:center; color: #888;">Loading…</td></tr>
+        <tbody id="tracked-body">
+            <tr><td colspan="6" style="text-align:center; color:#888;">Loading…</td></tr>
         </tbody>
+    </table>
+</div>
+
+<!-- Untracked beans from brew history -->
+<div class="card" style="margin-top:1.5rem;" id="untracked-card" hidden>
+    <h2 style="margin-top:0;">From Brew History — Not Tracked Yet</h2>
+    <p style="color:#888; font-size:0.85rem; margin-top:0;">These beans appear in your brews but have no inventory set.</p>
+    <table class="brew-table">
+        <thead>
+            <tr><th>Bean</th><th>Roaster</th><th>Total Used (g)</th><th></th></tr>
+        </thead>
+        <tbody id="untracked-body"></tbody>
     </table>
 </div>
 {% endblock %}
@@ -35,18 +71,20 @@ let shelfData = [];
 async function loadShelf() {
     const resp = await fetch('/api/v1/shelf');
     shelfData = await resp.json();
-    renderShelf();
     renderSummary();
+    renderTracked();
+    renderUntracked();
+    populateSuggestions();
 }
 
 function renderSummary() {
-    const totalInitial = shelfData.reduce((s, r) => s + (r.initial_grams || 0), 0);
-    const totalRemaining = shelfData.reduce((s, r) => s + (r.remaining_grams || 0), 0);
-    const tracked = shelfData.filter(r => r.initial_grams !== null).length;
+    const tracked = shelfData.filter(r => r.tracked);
+    const totalInitial = tracked.reduce((s, r) => s + (r.initial_grams || 0), 0);
+    const totalRemaining = tracked.reduce((s, r) => s + (r.remaining_grams || 0), 0);
     document.getElementById('shelf-summary').innerHTML = `
         <div class="stat-card">
-            <div class="value">${tracked}</div>
-            <div class="label">Templates Tracked</div>
+            <div class="value">${tracked.length}</div>
+            <div class="label">Beans Tracked</div>
         </div>
         <div class="stat-card">
             <div class="value">${totalInitial.toFixed(0)}g</div>
@@ -59,73 +97,114 @@ function renderSummary() {
     `;
 }
 
-function renderShelf() {
-    const tbody = document.getElementById('shelf-body');
-    if (!shelfData.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: #888;">No templates found. Create a template first.</td></tr>';
+function renderTracked() {
+    const rows = shelfData.filter(r => r.tracked);
+    const tbody = document.getElementById('tracked-body');
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">No beans tracked yet. Add one above.</td></tr>';
         return;
     }
-    tbody.innerHTML = shelfData.map(row => {
-        const hasInventory = row.initial_grams !== null;
-        const remaining = row.remaining_grams;
-        const pct = hasInventory && row.initial_grams > 0
-            ? Math.max(0, Math.min(100, (remaining / row.initial_grams) * 100))
-            : null;
-
-        let remainingCell = '—';
-        if (hasInventory) {
-            const color = pct > 40 ? '#4caf50' : pct > 15 ? '#ff9800' : '#f44336';
-            remainingCell = `
-                <span style="font-weight:600; color:${color}">${remaining.toFixed(1)}g</span>
-                <div style="background:#eee; border-radius:4px; height:6px; margin-top:4px; width:80px;">
-                    <div style="background:${color}; width:${pct.toFixed(0)}%; height:100%; border-radius:4px;"></div>
-                </div>`;
-        }
-
+    tbody.innerHTML = rows.map(r => {
+        const pct = r.initial_grams > 0 ? Math.max(0, Math.min(100, (r.remaining_grams / r.initial_grams) * 100)) : 0;
+        const color = pct > 40 ? '#4caf50' : pct > 15 ? '#ff9800' : '#f44336';
         return `<tr>
-            <td><strong>${row.template_name}</strong></td>
-            <td>${row.bean_name || '—'}</td>
-            <td>${row.brew_method || '—'}</td>
+            <td><strong>${r.bean_name}</strong></td>
+            <td>${r.roaster || '—'}</td>
             <td>
                 <div style="display:flex; gap:0.5rem; align-items:center;">
                     <input type="number" min="0" step="0.1"
-                        id="inv-${row.template_id}"
-                        value="${hasInventory ? row.initial_grams : ''}"
-                        placeholder="e.g. 250"
+                        id="grams-${r.id}"
+                        value="${r.initial_grams}"
                         style="width:90px;"
-                        onkeydown="if(event.key==='Enter') saveRow(${row.template_id})">
-                    <button class="btn btn-sm" onclick="saveRow(${row.template_id})">Save</button>
+                        onkeydown="if(event.key==='Enter') updateEntry(${r.id}, '${esc(r.bean_name)}', '${esc(r.roaster || '')}')">
+                    <button class="btn btn-sm" onclick="updateEntry(${r.id}, '${esc(r.bean_name)}', '${esc(r.roaster || '')}')">Update</button>
                 </div>
             </td>
-            <td>${hasInventory ? row.used_grams.toFixed(1) + 'g' : '—'}</td>
-            <td>${remainingCell}</td>
+            <td>${r.used_grams}g</td>
             <td>
-                ${hasInventory ? `<button class="btn btn-sm btn-danger" onclick="clearRow(${row.template_id})">Clear</button>` : ''}
+                <span style="font-weight:600; color:${color}">${r.remaining_grams}g</span>
+                <div style="background:#eee; border-radius:4px; height:6px; margin-top:4px; width:80px;">
+                    <div style="background:${color}; width:${pct.toFixed(0)}%; height:100%; border-radius:4px;"></div>
+                </div>
+            </td>
+            <td>
+                <button class="btn btn-sm btn-danger" onclick="removeEntry(${r.id})">Remove</button>
             </td>
         </tr>`;
     }).join('');
 }
 
-async function saveRow(templateId) {
-    const input = document.getElementById(`inv-${templateId}`);
-    const val = parseFloat(input.value);
-    if (isNaN(val) || val < 0) {
-        input.style.borderColor = '#f44336';
-        return;
-    }
-    input.style.borderColor = '';
-    await fetch(`/api/v1/shelf/${templateId}`, {
+function renderUntracked() {
+    const rows = shelfData.filter(r => !r.tracked);
+    const card = document.getElementById('untracked-card');
+    if (!rows.length) { card.hidden = true; return; }
+    card.hidden = false;
+    document.getElementById('untracked-body').innerHTML = rows.map(r => `
+        <tr>
+            <td>${r.bean_name}</td>
+            <td>${r.roaster || '—'}</td>
+            <td>${r.used_grams}g</td>
+            <td>
+                <button class="btn btn-sm" onclick="prefill('${esc(r.bean_name)}', '${esc(r.roaster || '')}')">
+                    + Add to Shelf
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function populateSuggestions() {
+    const beanSet = [...new Set(shelfData.map(r => r.bean_name).filter(Boolean))];
+    const roasterSet = [...new Set(shelfData.map(r => r.roaster).filter(Boolean))];
+    document.getElementById('bean-suggestions').innerHTML = beanSet.map(b => `<option value="${esc(b)}">`).join('');
+    document.getElementById('roaster-suggestions').innerHTML = roasterSet.map(r => `<option value="${esc(r)}">`).join('');
+}
+
+function prefill(bean, roaster) {
+    document.getElementById('add-bean').value = bean;
+    document.getElementById('add-roaster').value = roaster;
+    document.getElementById('add-grams').focus();
+    document.getElementById('add-bean').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function addEntry() {
+    const bean = document.getElementById('add-bean').value.trim();
+    const roaster = document.getElementById('add-roaster').value.trim() || null;
+    const grams = parseFloat(document.getElementById('add-grams').value);
+    const msg = document.getElementById('add-msg');
+    if (!bean) { msg.textContent = 'Bean name is required.'; msg.style.color = '#f44336'; return; }
+    if (isNaN(grams) || grams < 0) { msg.textContent = 'Enter a valid gram amount.'; msg.style.color = '#f44336'; return; }
+
+    await fetch('/api/v1/shelf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initial_amount_grams: val }),
+        body: JSON.stringify({ bean_name: bean, roaster, initial_amount_grams: grams }),
+    });
+    document.getElementById('add-bean').value = '';
+    document.getElementById('add-roaster').value = '';
+    document.getElementById('add-grams').value = '';
+    msg.textContent = `Saved ${grams}g of "${bean}".`;
+    msg.style.color = '#4caf50';
+    await loadShelf();
+}
+
+async function updateEntry(id, bean, roaster) {
+    const grams = parseFloat(document.getElementById(`grams-${id}`).value);
+    if (isNaN(grams) || grams < 0) return;
+    await fetch('/api/v1/shelf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bean_name: bean, roaster: roaster || null, initial_amount_grams: grams }),
     });
     await loadShelf();
 }
 
-async function clearRow(templateId) {
-    await fetch(`/api/v1/shelf/${templateId}`, { method: 'DELETE' });
+async function removeEntry(id) {
+    await fetch(`/api/v1/shelf/${id}`, { method: 'DELETE' });
     await loadShelf();
 }
+
+function esc(s) { return (s || '').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
 
 loadShelf();
 </script>

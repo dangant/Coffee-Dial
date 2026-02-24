@@ -26,11 +26,18 @@ import app.models.inventory  # noqa: F401
 # Create tables
 Base.metadata.create_all(bind=engine)
 
-# Migrate: add missing columns
+# Migrate: add missing columns / drop replaced tables
 from sqlalchemy import text, inspect
 with engine.connect() as conn:
     inspector = inspect(engine)
-    rating_cols = [c["name"] for c in inspector.get_columns("ratings")] if "ratings" in inspector.get_table_names() else []
+    tables = inspector.get_table_names()
+
+    # Drop the old template-keyed inventory table (replaced by bean_inventory)
+    if "coffee_inventory" in tables:
+        conn.execute(text("DROP TABLE coffee_inventory"))
+        conn.commit()
+
+    rating_cols = [c["name"] for c in inspector.get_columns("ratings")] if "ratings" in tables else []
     if "flavor_notes_accuracy" not in rating_cols:
         conn.execute(text("ALTER TABLE ratings ADD COLUMN flavor_notes_accuracy FLOAT"))
         conn.commit()
