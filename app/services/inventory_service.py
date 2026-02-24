@@ -128,21 +128,46 @@ def get_lp_data(db: Session, bean_name: str | None = None) -> dict:
     max_pour_overs = math.floor(total_remaining / POUR_OVER_GRAMS)
     max_espressos = math.floor(total_remaining / ESPRESSO_GRAMS)
 
-    # Optimal: maximize total cups → all espresso (18g < 25g per cup)
+    # True intercepts of 25x + 18y = W (continuous, not floored)
+    x_intercept = total_remaining / POUR_OVER_GRAMS   # e.g. 80/25 = 3.2
+    y_intercept = total_remaining / ESPRESSO_GRAMS    # e.g. 80/18 = 4.44
+
+    # Constraint line runs from exact intercept to exact intercept
     steps = 60
     constraint_line = []
     for i in range(steps + 1):
-        x = max_pour_overs * (1 - i / steps)
+        x = x_intercept * (1 - i / steps)
         y = (total_remaining - POUR_OVER_GRAMS * x) / ESPRESSO_GRAMS
-        constraint_line.append({"x": round(x, 2), "y": round(y, 2)})
+        constraint_line.append({"x": round(x, 3), "y": round(y, 3)})
+
+    # Integer frontier: for each integer pour-over count, the max feasible espressos.
+    # These are every "efficient" allocation — adding one more cup of either kind
+    # would exceed the budget.
+    integer_points = []
+    for po in range(max_pour_overs + 1):
+        esp = math.floor((total_remaining - POUR_OVER_GRAMS * po) / ESPRESSO_GRAMS)
+        if esp < 0:
+            break
+        beans_used = round(po * POUR_OVER_GRAMS + esp * ESPRESSO_GRAMS, 1)
+        leftover = round(total_remaining - beans_used, 1)
+        integer_points.append({
+            "pour_overs": po,
+            "espressos": esp,
+            "total_cups": po + esp,
+            "beans_used": beans_used,
+            "leftover": leftover,
+        })
 
     return {
         "total_remaining_grams": round(total_remaining, 1),
+        "x_intercept": round(x_intercept, 3),
+        "y_intercept": round(y_intercept, 3),
         "max_pour_overs": max_pour_overs,
         "max_espressos": max_espressos,
         "optimal_pour_overs": 0,
         "optimal_espressos": max_espressos,
         "constraint_line": constraint_line,
+        "integer_points": integer_points,
         "breakdown": [r for r in shelf if r["tracked"]],
     }
 

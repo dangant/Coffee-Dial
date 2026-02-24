@@ -336,32 +336,23 @@ async function loadLP() {
     const d = await resp.json();
     const W = d.total_remaining_grams;
 
-    // Pre-compute all three scenarios with leftovers
-    const espLeft  = +(W - d.optimal_espressos * 18).toFixed(1);
-    const poLeft   = +(W - d.max_pour_overs * 25).toFixed(1);
-    const equalN   = Math.floor(W / (25 + 18));
-    const eqLeft   = +(W - equalN * 25 - equalN * 18).toFixed(1);
-    const totalEspCups = d.optimal_espressos;
-    const totalPoCups  = d.max_pour_overs;
-    const totalEqCups  = equalN * 2;
+    // Key scenario leftovers
+    const espLeft = +(W - d.optimal_espressos * 18).toFixed(1);
+    const poLeft  = +(W - d.max_pour_overs * 25).toFixed(1);
 
-    // Summary: all three scenarios side by side
+    // Summary: remaining + two key scenarios
     document.getElementById('lp-summary').innerHTML = W > 0 ? `
         <div class="stat-card" style="flex:1; min-width:110px; padding:0.5rem 1rem;">
             <div class="value" style="font-size:1.4rem;">${W}g</div>
             <div class="label">Beans Remaining</div>
         </div>
         <div class="stat-card" style="flex:1; min-width:130px; padding:0.5rem 1rem; border-left:3px solid #6b4423;">
-            <div class="value" style="font-size:1.4rem;">★ ${totalEspCups} cups</div>
+            <div class="value" style="font-size:1.4rem;">★ ${d.optimal_espressos} cups</div>
             <div class="label">All Espresso &mdash; ${espLeft}g left</div>
         </div>
         <div class="stat-card" style="flex:1; min-width:130px; padding:0.5rem 1rem;">
-            <div class="value" style="font-size:1.4rem;">${totalPoCups} cups</div>
+            <div class="value" style="font-size:1.4rem;">${d.max_pour_overs} cups</div>
             <div class="label">All Pour Over &mdash; ${poLeft}g left</div>
-        </div>
-        <div class="stat-card" style="flex:1; min-width:130px; padding:0.5rem 1rem;">
-            <div class="value" style="font-size:1.4rem;">${equalN}+${equalN} cups</div>
-            <div class="label">Equal Split &mdash; ${eqLeft}g left</div>
         </div>
     ` : `
         <div class="stat-card" style="flex:1; min-width:110px; padding:0.5rem 1rem;">
@@ -372,9 +363,9 @@ async function loadLP() {
 
     // Recommendation
     document.getElementById('lp-recommendation').innerHTML = W > 0
-        ? `<strong>Optimal (max cups):</strong> ${totalEspCups} espressos uses ${(totalEspCups*18).toFixed(0)}g, leaving <strong>${espLeft}g</strong>.
-           &nbsp;|&nbsp; All pour over: ${totalPoCups} cups, <strong>${poLeft}g</strong> left.
-           &nbsp;|&nbsp; Equal split: ${equalN} of each (${totalEqCups} total), <strong>${eqLeft}g</strong> left.`
+        ? `<strong>Optimal (max cups):</strong> ${d.optimal_espressos} espressos uses ${(d.optimal_espressos*18).toFixed(0)}g, leaving <strong>${espLeft}g</strong>.
+           &nbsp;|&nbsp; All pour over: ${d.max_pour_overs} cups, <strong>${poLeft}g</strong> left.
+           Hover any dot on the chart to see the exact trade-off for that allocation.`
         : `<strong>No inventory tracked${beanFilter ? ` for &ldquo;${beanFilter}&rdquo;` : ''}.</strong>
            Visit <a href="/shelf">On the Shelf</a> to enter your bean inventory.`;
 
@@ -411,6 +402,21 @@ async function loadLP() {
     if (W <= 0) return;
 
     const tradeoffLine = d.constraint_line.map(p => ({ x: p.x, y: p.y }));
+    const pts = d.integer_points;  // [{pour_overs, espressos, total_cups, beans_used, leftover}]
+
+    // Visual properties per point — key corners get distinct styles
+    const isOptEsp  = p => p.pour_overs === 0;
+    const isOptPour = p => p.espressos === 0;
+    const ptColors  = pts.map(p => isOptEsp(p) ? '#6b4423' : isOptPour(p) ? '#d4a574' : '#a67c52');
+    const ptRadii   = pts.map(p => (isOptEsp(p) || isOptPour(p)) ? 11 : 7);
+    const ptStyles  = pts.map(p => isOptEsp(p) ? 'star' : isOptPour(p) ? 'triangle' : 'circle');
+
+    // Text labels only on the two corner points
+    const ptLabels  = pts.map(p => {
+        if (isOptEsp(p))  return [`★ ${p.espressos} esp`, `${p.leftover}g left`];
+        if (isOptPour(p)) return [`${p.pour_overs} po`, `${p.leftover}g left`];
+        return null;
+    });
 
     lpChart = new Chart(document.getElementById('lpChart'), {
         type: 'scatter',
@@ -418,42 +424,28 @@ async function loadLP() {
         data: {
             datasets: [
                 {
-                    label: `Trade-off line (25x + 18y = ${W}g)`,
+                    label: `25x + 18y = ${W}g (boundary)`,
                     data: tradeoffLine,
                     type: 'line',
                     borderColor: '#6b4423',
-                    backgroundColor: 'rgba(107,68,35,0.08)',
-                    borderWidth: 2,
+                    backgroundColor: 'rgba(107,68,35,0.07)',
+                    borderWidth: 1.5,
+                    borderDash: [5, 3],
                     pointRadius: 0,
                     fill: 'origin',
                     tension: 0,
-                    order: 2,
+                    order: 3,
                 },
                 {
-                    label: `★ All Espresso: ${totalEspCups} cups (${espLeft}g left)`,
-                    data: [{ x: 0, y: d.optimal_espressos }],
-                    backgroundColor: '#6b4423',
-                    pointRadius: 10,
-                    pointStyle: 'star',
+                    label: 'Efficient allocations',
+                    data: pts.map(p => ({ x: p.pour_overs, y: p.espressos })),
+                    backgroundColor: ptColors,
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 1.5,
+                    pointRadius: ptRadii,
+                    pointStyle: ptStyles,
                     order: 1,
-                    _pointLabels: [[`★ ${totalEspCups} esp`, `${espLeft}g left`]],
-                },
-                {
-                    label: `All Pour Over: ${totalPoCups} cups (${poLeft}g left)`,
-                    data: [{ x: d.max_pour_overs, y: 0 }],
-                    backgroundColor: '#d4a574',
-                    pointRadius: 8,
-                    order: 1,
-                    _pointLabels: [[`${totalPoCups} po`, `${poLeft}g left`]],
-                },
-                {
-                    label: `Equal Split: ${equalN}+${equalN} cups (${eqLeft}g left)`,
-                    data: [{ x: equalN, y: equalN }],
-                    backgroundColor: '#8b5e3c',
-                    pointRadius: 8,
-                    pointStyle: 'rect',
-                    order: 1,
-                    _pointLabels: [[`${equalN}+${equalN}`, `${eqLeft}g left`]],
+                    _pointLabels: ptLabels,
                 },
             ]
         },
@@ -464,12 +456,14 @@ async function loadLP() {
                 x: {
                     title: { display: true, text: 'Pour Overs (cups)' },
                     min: 0,
-                    suggestedMax: Math.ceil(d.max_pour_overs * 1.15) + 1,
+                    ticks: { stepSize: 1, precision: 0 },
+                    suggestedMax: Math.ceil(d.x_intercept * 1.2) + 1,
                 },
                 y: {
                     title: { display: true, text: 'Espressos (cups)' },
                     min: 0,
-                    suggestedMax: Math.ceil(d.max_espressos * 1.15) + 1,
+                    ticks: { stepSize: 1, precision: 0 },
+                    suggestedMax: Math.ceil(d.y_intercept * 1.15) + 1,
                 }
             },
             plugins: {
@@ -478,29 +472,15 @@ async function loadLP() {
                     callbacks: {
                         title: () => '',
                         label: (ctx) => {
-                            const px = ctx.parsed.x;
-                            const py = ctx.parsed.y;
-                            if (ctx.datasetIndex === 0) {
-                                // Constraint line: floor to integer cups
-                                const x = Math.floor(px);
-                                const y = Math.floor(py);
-                                const used = x * 25 + y * 18;
-                                const left = (W - used).toFixed(1);
-                                return [
-                                    `${x} pour over${x !== 1 ? 's' : ''} + ${y} espresso${y !== 1 ? 's' : ''}`,
-                                    `Beans used: ${used}g`,
-                                    `Beans left over: ${left}g`,
-                                ];
-                            }
-                            // Key points: exact integer values
-                            const x = Math.round(px);
-                            const y = Math.round(py);
-                            const used = x * 25 + y * 18;
-                            const left = (W - used).toFixed(1);
+                            if (ctx.datasetIndex === 0) return null; // hide constraint line tooltip
+                            const pt = pts[ctx.dataIndex];
+                            const po = pt.pour_overs;
+                            const esp = pt.espressos;
                             return [
-                                ctx.dataset.label.replace(/\(.*\)/, '').trim(),
-                                `Beans used: ${used}g`,
-                                `Beans left over: ${left}g`,
+                                `${po} pour over${po !== 1 ? 's' : ''} + ${esp} espresso${esp !== 1 ? 's' : ''}`,
+                                `Total cups: ${pt.total_cups}`,
+                                `Beans used: ${pt.beans_used}g`,
+                                `Beans left over: ${pt.leftover}g`,
                             ];
                         }
                     }
