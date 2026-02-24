@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}On the Shelf - Coffee Data{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>On the Shelf</h1>
+    <p style="color: var(--text-muted, #888); margin-top: 0.25rem;">Track your bean inventory. Every brew deducts from your stash.</p>
+</div>
+
+<div id="shelf-summary" class="stat-grid" style="margin-bottom: 1.5rem;"></div>
+
+<div class="card">
+    <table class="brew-table" id="shelf-table">
+        <thead>
+            <tr>
+                <th>Template</th>
+                <th>Bean</th>
+                <th>Method</th>
+                <th>On Shelf (g)</th>
+                <th>Used (g)</th>
+                <th>Remaining (g)</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody id="shelf-body">
+            <tr><td colspan="7" style="text-align:center; color: #888;">Loading…</td></tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let shelfData = [];
+
+async function loadShelf() {
+    const resp = await fetch('/api/v1/shelf');
+    shelfData = await resp.json();
+    renderShelf();
+    renderSummary();
+}
+
+function renderSummary() {
+    const totalInitial = shelfData.reduce((s, r) => s + (r.initial_grams || 0), 0);
+    const totalRemaining = shelfData.reduce((s, r) => s + (r.remaining_grams || 0), 0);
+    const tracked = shelfData.filter(r => r.initial_grams !== null).length;
+    document.getElementById('shelf-summary').innerHTML = `
+        <div class="stat-card">
+            <div class="value">${tracked}</div>
+            <div class="label">Templates Tracked</div>
+        </div>
+        <div class="stat-card">
+            <div class="value">${totalInitial.toFixed(0)}g</div>
+            <div class="label">Total Stocked</div>
+        </div>
+        <div class="stat-card">
+            <div class="value">${totalRemaining.toFixed(0)}g</div>
+            <div class="label">Total Remaining</div>
+        </div>
+    `;
+}
+
+function renderShelf() {
+    const tbody = document.getElementById('shelf-body');
+    if (!shelfData.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: #888;">No templates found. Create a template first.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = shelfData.map(row => {
+        const hasInventory = row.initial_grams !== null;
+        const remaining = row.remaining_grams;
+        const pct = hasInventory && row.initial_grams > 0
+            ? Math.max(0, Math.min(100, (remaining / row.initial_grams) * 100))
+            : null;
+
+        let remainingCell = '—';
+        if (hasInventory) {
+            const color = pct > 40 ? '#4caf50' : pct > 15 ? '#ff9800' : '#f44336';
+            remainingCell = `
+                <span style="font-weight:600; color:${color}">${remaining.toFixed(1)}g</span>
+                <div style="background:#eee; border-radius:4px; height:6px; margin-top:4px; width:80px;">
+                    <div style="background:${color}; width:${pct.toFixed(0)}%; height:100%; border-radius:4px;"></div>
+                </div>`;
+        }
+
+        return `<tr>
+            <td><strong>${row.template_name}</strong></td>
+            <td>${row.bean_name || '—'}</td>
+            <td>${row.brew_method || '—'}</td>
+            <td>
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                    <input type="number" min="0" step="0.1"
+                        id="inv-${row.template_id}"
+                        value="${hasInventory ? row.initial_grams : ''}"
+                        placeholder="e.g. 250"
+                        style="width:90px;"
+                        onkeydown="if(event.key==='Enter') saveRow(${row.template_id})">
+                    <button class="btn btn-sm" onclick="saveRow(${row.template_id})">Save</button>
+                </div>
+            </td>
+            <td>${hasInventory ? row.used_grams.toFixed(1) + 'g' : '—'}</td>
+            <td>${remainingCell}</td>
+            <td>
+                ${hasInventory ? `<button class="btn btn-sm btn-danger" onclick="clearRow(${row.template_id})">Clear</button>` : ''}
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+async function saveRow(templateId) {
+    const input = document.getElementById(`inv-${templateId}`);
+    const val = parseFloat(input.value);
+    if (isNaN(val) || val < 0) {
+        input.style.borderColor = '#f44336';
+        return;
+    }
+    input.style.borderColor = '';
+    await fetch(`/api/v1/shelf/${templateId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initial_amount_grams: val }),
+    });
+    await loadShelf();
+}
+
+async function clearRow(templateId) {
+    await fetch(`/api/v1/shelf/${templateId}`, { method: 'DELETE' });
+    await loadShelf();
+}
+
+loadShelf();
+</script>
+{% endblock %}

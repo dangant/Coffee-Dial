@@ -13,11 +13,15 @@ from app.routers import (
     api_lookups,
     api_ratings,
     api_recommendations,
+    api_shelf,
     api_templates,
     pages,
 )
 from app.services.lookup_service import seed_lookups
 from app.services.recommendation_service import seed_rules
+
+# Import all models so Base.metadata knows about them
+import app.models.inventory  # noqa: F401
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -67,6 +71,7 @@ app.include_router(api_analytics.router)
 app.include_router(api_recommendations.router)
 app.include_router(api_lookups.router)
 app.include_router(api_grind_lab.router)
+app.include_router(api_shelf.router)
 
 # Page routers
 app.include_router(pages.router)

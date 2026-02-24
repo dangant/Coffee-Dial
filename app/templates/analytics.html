@@ -124,6 +124,19 @@
             <canvas id="roasterChart"></canvas>
         </div>
     </div>
+
+    <div class="card" style="grid-column: 1 / -1;">
+        <h2>Bean Inventory: Pour Over vs Espresso Trade-off</h2>
+        <p style="color: var(--text-muted, #888); margin-bottom: 1rem; font-size: 0.9rem;">
+            Linear programming optimal allocation — Pour Over uses <strong>25g</strong>, Espresso uses <strong>18g</strong> per cup.
+        </p>
+        <div id="lp-summary" style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;"></div>
+        <div class="chart-container">
+            <canvas id="lpChart"></canvas>
+        </div>
+        <div id="lp-recommendation" style="margin-top:1rem; padding:0.75rem 1rem; background:rgba(107,68,35,0.08); border-left:3px solid #6b4423; border-radius:4px; font-size:0.9rem;"></div>
+        <div id="lp-breakdown" style="margin-top:1rem;"></div>
+    </div>
 </div>
 {% endblock %}
 
@@ -272,9 +285,162 @@ async function loadRoasterDist() {
     });
 }
 
+let lpChart;
+
+async function loadLP() {
+    const resp = await fetch('/api/v1/shelf/lp');
+    const d = await resp.json();
+
+    // Summary chips
+    const summaryEl = document.getElementById('lp-summary');
+    summaryEl.innerHTML = `
+        <div class="stat-card" style="flex:1; min-width:120px; padding:0.5rem 1rem;">
+            <div class="value" style="font-size:1.4rem;">${d.total_remaining_grams}g</div>
+            <div class="label">Total Beans Remaining</div>
+        </div>
+        <div class="stat-card" style="flex:1; min-width:120px; padding:0.5rem 1rem;">
+            <div class="value" style="font-size:1.4rem;">${d.max_pour_overs}</div>
+            <div class="label">Max Pour Overs</div>
+        </div>
+        <div class="stat-card" style="flex:1; min-width:120px; padding:0.5rem 1rem;">
+            <div class="value" style="font-size:1.4rem;">${d.max_espressos}</div>
+            <div class="label">Max Espressos</div>
+        </div>
+        <div class="stat-card" style="flex:1; min-width:120px; padding:0.5rem 1rem; border-left:3px solid #6b4423;">
+            <div class="value" style="font-size:1.4rem;">${d.optimal_espressos}</div>
+            <div class="label">Optimal (Max Cups)</div>
+        </div>
+    `;
+
+    // Recommendation text
+    document.getElementById('lp-recommendation').innerHTML = d.total_remaining_grams > 0
+        ? `<strong>Optimal recommendation:</strong> With <strong>${d.total_remaining_grams}g</strong> of beans on the shelf,
+           make <strong>${d.optimal_espressos} espressos</strong> to maximize total cups.
+           Alternatively, you could make up to <strong>${d.max_pour_overs} pour overs</strong>
+           — but that uses ${(d.max_pour_overs * 25).toFixed(0)}g vs ${(d.optimal_espressos * 18).toFixed(0)}g for espresso.
+           Any combination along the trade-off line is feasible.`
+        : '<strong>No beans tracked on the shelf yet.</strong> Visit the <a href="/shelf">On the Shelf</a> page to enter your inventory.';
+
+    // Breakdown table
+    const tracked = d.template_breakdown.filter(t => t.initial_grams !== null);
+    if (tracked.length) {
+        document.getElementById('lp-breakdown').innerHTML = `
+            <details style="margin-top:0.5rem;">
+                <summary style="cursor:pointer; font-weight:600; color:#6b4423;">Per-Template Breakdown</summary>
+                <table class="brew-table" style="margin-top:0.5rem;">
+                    <thead><tr><th>Template</th><th>Method</th><th>Remaining</th><th>Max Cups</th></tr></thead>
+                    <tbody>
+                        ${tracked.map(t => {
+                            const gramsPerCup = t.brew_method === 'Espresso' ? 18 : 25;
+                            const maxCups = t.remaining_grams !== null ? Math.floor(t.remaining_grams / gramsPerCup) : '—';
+                            return `<tr>
+                                <td>${t.template_name}</td>
+                                <td>${t.brew_method || '—'}</td>
+                                <td>${t.remaining_grams !== null ? t.remaining_grams.toFixed(1) + 'g' : '—'}</td>
+                                <td>${maxCups}</td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </details>`;
+    }
+
+    if (lpChart) lpChart.destroy();
+
+    if (d.total_remaining_grams <= 0) return;
+
+    // Build datasets
+    const tradeoffLine = d.constraint_line.map(p => ({ x: p.x, y: p.y }));
+
+    // Feasible region: the polygon (0,0) -> (max_pour_overs, 0) -> constraint line -> (0, max_espressos)
+    // We approximate with the constraint line + closing at origin
+    const feasibleArea = [
+        { x: 0, y: 0 },
+        ...tradeoffLine,
+        { x: 0, y: 0 },
+    ];
+
+    lpChart = new Chart(document.getElementById('lpChart'), {
+        type: 'scatter',
+        data: {
+            datasets: [
+                {
+                    label: 'Trade-off Boundary (25x + 18y = total beans)',
+                    data: tradeoffLine,
+                    type: 'line',
+                    borderColor: '#6b4423',
+                    backgroundColor: 'rgba(107,68,35,0.08)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: 'origin',
+                    tension: 0,
+                    order: 2,
+                },
+                {
+                    label: `Optimal: ${d.optimal_espressos} espressos (max cups)`,
+                    data: [{ x: d.optimal_pour_overs, y: d.optimal_espressos }],
+                    backgroundColor: '#6b4423',
+                    pointRadius: 10,
+                    pointStyle: 'star',
+                    order: 1,
+                },
+                {
+                    label: `All Pour Over: ${d.max_pour_overs} cups`,
+                    data: [{ x: d.max_pour_overs, y: 0 }],
+                    backgroundColor: '#d4a574',
+                    pointRadius: 8,
+                    order: 1,
+                },
+                {
+                    label: 'Equal Split',
+                    data: (() => {
+                        // Equal cups: x = y → 25x + 18x = W → x = W/43
+                        const x = d.total_remaining_grams / (25 + 18);
+                        return [{ x: Math.floor(x), y: Math.floor(x) }];
+                    })(),
+                    backgroundColor: '#8b5e3c',
+                    pointRadius: 8,
+                    pointStyle: 'rect',
+                    order: 1,
+                },
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    title: { display: true, text: 'Pour Overs (cups)' },
+                    min: 0,
+                    suggestedMax: Math.ceil(d.max_pour_overs * 1.05) + 1,
+                },
+                y: {
+                    title: { display: true, text: 'Espressos (cups)' },
+                    min: 0,
+                    suggestedMax: Math.ceil(d.max_espressos * 1.05) + 1,
+                }
+            },
+            plugins: {
+                legend: { display: true },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => {
+                            if (ctx.datasetIndex === 0) {
+                                return `${ctx.parsed.x.toFixed(1)} pour overs + ${ctx.parsed.y.toFixed(1)} espressos`;
+                            }
+                            return `${ctx.dataset.label}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
 // Load all on page ready
 loadDistribution();
 loadRoasterDist();
+loadLP();
 loadFilterOptions().then(() => { loadTrends(); loadCorrelations(); });
 </script>
 {% endblock %}
