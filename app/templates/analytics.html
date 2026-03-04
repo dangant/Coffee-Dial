@@ -108,9 +108,10 @@
             </div>
             <div class="form-group" style="flex: 1; margin: 0; min-width: 120px;">
                 <label>Method</label>
-                <select id="corr-method" onchange="loadCorrelations()">
-                    <option value="">All</option>
-                </select>
+                <div class="temp-toggle" id="corr-method-toggle">
+                    <button type="button" data-method="Pour Over" class="active" onclick="setCorrMethod(this)">Pour Over</button>
+                    <button type="button" data-method="Espresso" onclick="setCorrMethod(this)">Espresso</button>
+                </div>
             </div>
         </div>
         <div class="chart-container">
@@ -221,12 +222,17 @@ async function loadFilterOptions() {
         const data = await resp.json();
         populateSelect(document.getElementById('corr-bean'), data.bean_names);
         populateSelect(document.getElementById('corr-grinder'), data.grinders);
-        populateSelect(document.getElementById('corr-method'), data.brew_methods);
         populateSelect(document.getElementById('trend-bean'), data.bean_names);
         populateSelect(document.getElementById('trend-grinder'), data.grinders);
     } catch (e) {
         console.error('Failed to load filter options:', e);
     }
+}
+
+function setCorrMethod(btn) {
+    document.querySelectorAll('#corr-method-toggle button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadCorrelations();
 }
 
 async function loadCorrelations() {
@@ -235,25 +241,41 @@ async function loadCorrelations() {
         const y = document.getElementById('corr-y').value;
         const bean = document.getElementById('corr-bean').value;
         const grinder = document.getElementById('corr-grinder').value;
-        const method = document.getElementById('corr-method').value;
+        const methodBtn = document.querySelector('#corr-method-toggle button.active');
+        const method = methodBtn ? methodBtn.dataset.method : 'Pour Over';
         let url = `/api/v1/analytics/correlations?x=${x}&y=${y}`;
         if (bean) url += `&bean_name=${encodeURIComponent(bean)}`;
         if (grinder) url += `&grinder=${encodeURIComponent(grinder)}`;
-        if (method) url += `&brew_method=${encodeURIComponent(method)}`;
+        url += `&brew_method=${encodeURIComponent(method)}`;
         const resp = await fetch(url);
         if (!resp.ok) { console.error('Correlation fetch failed:', resp.status); return; }
         const data = await resp.json();
         if (corrChart) corrChart.destroy();
         const xLabel = document.getElementById('corr-x').selectedOptions[0].text;
         const yLabel = document.getElementById('corr-y').selectedOptions[0].text;
+
+        // Aggregate duplicate x,y pairs and track count
+        const countMap = {};
+        data.forEach(d => {
+            const key = `${d.x}|${d.y}`;
+            countMap[key] = (countMap[key] || 0) + 1;
+        });
+        const aggregated = Object.entries(countMap).map(([key, count]) => {
+            const [xv, yv] = key.split('|').map(Number);
+            return { x: xv, y: yv, count };
+        });
+        const minR = 6, maxR = 20;
+        const maxCount = Math.max(...aggregated.map(d => d.count), 1);
+        const radii = aggregated.map(d => maxCount === 1 ? minR : minR + (d.count - 1) / (maxCount - 1) * (maxR - minR));
+
         corrChart = new Chart(document.getElementById('correlationChart'), {
             type: 'scatter',
             data: {
                 datasets: [{
                     label: `${xLabel} vs ${yLabel}`,
-                    data: data.map(d => ({ x: d.x, y: d.y })),
+                    data: aggregated,
                     backgroundColor: 'rgba(107,68,35,0.6)',
-                    pointRadius: 6,
+                    pointRadius: radii,
                 }]
             },
             options: {
@@ -266,7 +288,12 @@ async function loadCorrelations() {
                     legend: { display: true },
                     tooltip: {
                         callbacks: {
-                            label: (ctx) => `${xLabel}: ${ctx.parsed.x}, ${yLabel}: ${ctx.parsed.y}`
+                            label: (ctx) => {
+                                const pt = aggregated[ctx.dataIndex];
+                                const lines = [`${xLabel}: ${pt.x}, ${yLabel}: ${pt.y}`];
+                                if (pt.count > 1) lines.push(`Used ${pt.count} times`);
+                                return lines;
+                            }
                         }
                     }
                 }
