@@ -128,14 +128,24 @@
 
     <div class="card" style="grid-column: 1 / -1;">
         <h2>Bean Inventory: Pour Over vs Espresso Trade-off</h2>
-        <p style="color: var(--text-muted, #888); margin-bottom: 1rem; font-size: 0.9rem;">
+        <p id="lp-subtitle" style="color: var(--text-muted, #888); margin-bottom: 1rem; font-size: 0.9rem;">
             Linear programming optimal allocation — Pour Over uses <strong>25g</strong>, Espresso uses <strong>18g</strong> per cup.
         </p>
-        <div class="form-group" style="max-width:260px; margin-bottom:1rem;">
-            <label>Bean</label>
-            <select id="lp-bean-filter" onchange="loadLP()">
-                <option value="">All Beans</option>
-            </select>
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: flex-end;">
+            <div class="form-group" style="flex: 1; margin: 0; min-width: 140px; max-width: 260px;">
+                <label>Bean</label>
+                <select id="lp-bean-filter" onchange="loadLP()">
+                    <option value="">All Beans</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin: 0; min-width: 100px; max-width: 130px;">
+                <label>Pour Over (g)</label>
+                <input type="number" id="lp-po-grams" value="25" min="1" step="0.5" onchange="loadLP()">
+            </div>
+            <div class="form-group" style="margin: 0; min-width: 100px; max-width: 130px;">
+                <label>Espresso (g)</label>
+                <input type="number" id="lp-esp-grams" value="18" min="1" step="0.5" onchange="loadLP()">
+            </div>
         </div>
         <div id="lp-summary" style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;"></div>
         <div class="chart-container">
@@ -358,14 +368,26 @@ async function populateLPBeans() {
 
 async function loadLP() {
     const beanFilter = document.getElementById('lp-bean-filter')?.value || '';
-    const url = beanFilter ? `/api/v1/shelf/lp?bean_name=${encodeURIComponent(beanFilter)}` : '/api/v1/shelf/lp';
+    const poGrams = parseFloat(document.getElementById('lp-po-grams')?.value) || 25;
+    const espGrams = parseFloat(document.getElementById('lp-esp-grams')?.value) || 18;
+    const params = new URLSearchParams();
+    if (beanFilter) params.set('bean_name', beanFilter);
+    params.set('pour_over_grams', poGrams);
+    params.set('espresso_grams', espGrams);
+    const url = `/api/v1/shelf/lp?${params}`;
     const resp = await fetch(url);
     const d = await resp.json();
     const W = d.total_remaining_grams;
+    const po_g = d.pour_over_grams || poGrams;
+    const esp_g = d.espresso_grams || espGrams;
+
+    // Update subtitle with current recipe
+    document.getElementById('lp-subtitle').innerHTML =
+        `Linear programming optimal allocation — Pour Over uses <strong>${po_g}g</strong>, Espresso uses <strong>${esp_g}g</strong> per cup.`;
 
     // Key scenario leftovers
-    const espLeft = +(W - d.optimal_espressos * 18).toFixed(1);
-    const poLeft  = +(W - d.max_pour_overs * 25).toFixed(1);
+    const espLeft = +(W - d.optimal_espressos * esp_g).toFixed(1);
+    const poLeft  = +(W - d.max_pour_overs * po_g).toFixed(1);
 
     // Summary: remaining + two key scenarios
     document.getElementById('lp-summary').innerHTML = W > 0 ? `
@@ -390,7 +412,7 @@ async function loadLP() {
 
     // Recommendation
     document.getElementById('lp-recommendation').innerHTML = W > 0
-        ? `<strong>Optimal (max cups):</strong> ${d.optimal_espressos} espressos uses ${(d.optimal_espressos*18).toFixed(0)}g, leaving <strong>${espLeft}g</strong>.
+        ? `<strong>Optimal (max cups):</strong> ${d.optimal_espressos} espressos uses ${(d.optimal_espressos*esp_g).toFixed(0)}g, leaving <strong>${espLeft}g</strong>.
            &nbsp;|&nbsp; All pour over: ${d.max_pour_overs} cups, <strong>${poLeft}g</strong> left.
            Hover any dot on the chart to see the exact trade-off for that allocation.`
         : `<strong>No inventory tracked${beanFilter ? ` for &ldquo;${beanFilter}&rdquo;` : ''}.</strong>
@@ -406,16 +428,16 @@ async function loadLP() {
                     <tbody>
                         ${d.breakdown.map(b => {
                             const r = b.remaining_grams;
-                            const maxE = r != null ? Math.floor(r / 18) : null;
-                            const maxP = r != null ? Math.floor(r / 25) : null;
+                            const maxE = r != null ? Math.floor(r / esp_g) : null;
+                            const maxP = r != null ? Math.floor(r / po_g) : null;
                             return `<tr>
                                 <td>${b.bean_name}</td>
                                 <td>${b.roaster || '—'}</td>
                                 <td>${r != null ? r + 'g' : '—'}</td>
                                 <td>${maxE != null ? maxE : '—'}</td>
-                                <td>${maxE != null ? (r - maxE*18).toFixed(1)+'g' : '—'}</td>
+                                <td>${maxE != null ? (r - maxE*esp_g).toFixed(1)+'g' : '—'}</td>
                                 <td>${maxP != null ? maxP : '—'}</td>
-                                <td>${maxP != null ? (r - maxP*25).toFixed(1)+'g' : '—'}</td>
+                                <td>${maxP != null ? (r - maxP*po_g).toFixed(1)+'g' : '—'}</td>
                             </tr>`;
                         }).join('')}
                     </tbody>
@@ -451,7 +473,7 @@ async function loadLP() {
         data: {
             datasets: [
                 {
-                    label: `25x + 18y = ${W}g (boundary)`,
+                    label: `${po_g}x + ${esp_g}y = ${W}g (boundary)`,
                     data: tradeoffLine,
                     type: 'line',
                     borderColor: '#6b4423',

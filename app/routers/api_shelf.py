@@ -19,9 +19,11 @@ class InventoryUpsert(BaseModel):
 @router.get("/lp")
 def get_lp(
     bean_name: Optional[str] = Query(None),
+    pour_over_grams: Optional[float] = Query(None),
+    espresso_grams: Optional[float] = Query(None),
     db: Session = Depends(get_db),
 ):
-    return inventory_service.get_lp_data(db, bean_name=bean_name)
+    return inventory_service.get_lp_data(db, bean_name=bean_name, pour_over_grams=pour_over_grams, espresso_grams=espresso_grams)
 
 
 @router.get("/beans")

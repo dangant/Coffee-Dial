@@ -98,14 +98,17 @@ def list_shelf(db: Session) -> list[dict]:
     return result
 
 
-def get_lp_data(db: Session, bean_name: str | None = None) -> dict:
+def get_lp_data(db: Session, bean_name: str | None = None, pour_over_grams: float | None = None, espresso_grams: float | None = None) -> dict:
     """
     Compute LP tradeoff for pour over vs espresso.
     Maximize total cups x + y
-    Subject to: 25x + 18y <= remaining_grams, x >= 0, y >= 0
+    Subject to: po_g*x + esp_g*y <= remaining_grams, x >= 0, y >= 0
 
     If bean_name provided, only use that bean's inventory.
     """
+    po_g = pour_over_grams if pour_over_grams and pour_over_grams > 0 else POUR_OVER_GRAMS
+    esp_g = espresso_grams if espresso_grams and espresso_grams > 0 else ESPRESSO_GRAMS
+
     shelf = list_shelf(db)
     if bean_name:
         shelf = [r for r in shelf if r["bean_name"] == bean_name]
@@ -123,32 +126,31 @@ def get_lp_data(db: Session, bean_name: str | None = None) -> dict:
             "optimal_espressos": 0,
             "constraint_line": [],
             "breakdown": shelf,
+            "pour_over_grams": po_g,
+            "espresso_grams": esp_g,
         }
 
-    max_pour_overs = math.floor(total_remaining / POUR_OVER_GRAMS)
-    max_espressos = math.floor(total_remaining / ESPRESSO_GRAMS)
+    max_pour_overs = math.floor(total_remaining / po_g)
+    max_espressos = math.floor(total_remaining / esp_g)
 
-    # True intercepts of 25x + 18y = W (continuous, not floored)
-    x_intercept = total_remaining / POUR_OVER_GRAMS   # e.g. 80/25 = 3.2
-    y_intercept = total_remaining / ESPRESSO_GRAMS    # e.g. 80/18 = 4.44
+    x_intercept = total_remaining / po_g
+    y_intercept = total_remaining / esp_g
 
     # Constraint line runs from exact intercept to exact intercept
     steps = 60
     constraint_line = []
     for i in range(steps + 1):
         x = x_intercept * (1 - i / steps)
-        y = (total_remaining - POUR_OVER_GRAMS * x) / ESPRESSO_GRAMS
+        y = (total_remaining - po_g * x) / esp_g
         constraint_line.append({"x": round(x, 3), "y": round(y, 3)})
 
     # Integer frontier: for each integer pour-over count, the max feasible espressos.
-    # These are every "efficient" allocation — adding one more cup of either kind
-    # would exceed the budget.
     integer_points = []
     for po in range(max_pour_overs + 1):
-        esp = math.floor((total_remaining - POUR_OVER_GRAMS * po) / ESPRESSO_GRAMS)
+        esp = math.floor((total_remaining - po_g * po) / esp_g)
         if esp < 0:
             break
-        beans_used = round(po * POUR_OVER_GRAMS + esp * ESPRESSO_GRAMS, 1)
+        beans_used = round(po * po_g + esp * esp_g, 1)
         leftover = round(total_remaining - beans_used, 1)
         integer_points.append({
             "pour_overs": po,
@@ -169,6 +171,8 @@ def get_lp_data(db: Session, bean_name: str | None = None) -> dict:
         "constraint_line": constraint_line,
         "integer_points": integer_points,
         "breakdown": [r for r in shelf if r["tracked"]],
+        "pour_over_grams": po_g,
+        "espresso_grams": esp_g,
     }
 
 
