@@ -506,3 +506,9 @@ def grind_lab_page(request: Request):
 @router.get("/shelf", response_class=HTMLResponse)
 def shelf_page(request: Request):
     return templates.TemplateResponse("shelf.html", {"request": request})
+
+
+# Data Management page
+@router.get("/data", response_class=HTMLResponse)
+def data_page(request: Request):
+    return templates.TemplateResponse("data.html", {"request": request})

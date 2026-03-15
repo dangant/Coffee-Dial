@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Data Management - Coffee Data{% endblock %}
+
+{% block content %}
+<h1>Data Management</h1>
+<p>Export all your data as a JSON file, or import a previously exported file into this instance.</p>
+
+<section class="card" style="margin-bottom: 2rem;">
+    <h2>Export</h2>
+    <p>Download a complete backup of all brews, ratings, templates, inventory, and lookups.</p>
+    <a href="/api/v1/data/export" class="btn btn-primary">Download Export</a>
+</section>
+
+<section class="card">
+    <h2>Import</h2>
+    <p><strong>Warning:</strong> Importing will replace all existing data in this instance.</p>
+    <form id="import-form" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="file">Select export file (.json)</label>
+            <input type="file" id="file" name="file" accept=".json,application/json" required>
+        </div>
+        <button type="submit" class="btn btn-danger" id="import-btn">Import Data</button>
+    </form>
+    <div id="import-result" style="margin-top: 1rem;"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('import-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const fileInput = document.getElementById('file');
+    if (!fileInput.files.length) return;
+
+    if (!confirm('This will replace ALL existing data. Are you sure?')) return;
+
+    const btn = document.getElementById('import-btn');
+    const resultDiv = document.getElementById('import-result');
+    btn.disabled = true;
+    btn.textContent = 'Importing...';
+    resultDiv.innerHTML = '';
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    try {
+        const resp = await fetch('/api/v1/data/import', {
+            method: 'POST',
+            body: formData,
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            const counts = data.imported;
+            resultDiv.innerHTML = '<p style="color: green;"><strong>Import successful!</strong></p>'
+                + '<ul>'
+                + '<li>Brews: ' + counts.brews + '</li>'
+                + '<li>Ratings: ' + counts.ratings + '</li>'
+                + '<li>Templates: ' + counts.brew_templates + '</li>'
+                + '<li>Inventory: ' + counts.bean_inventory + '</li>'
+                + '<li>Flavor Notes: ' + counts.flavor_notes + '</li>'
+                + '<li>Brew Devices: ' + counts.brew_devices + '</li>'
+                + '<li>Grinders: ' + counts.grinders + '</li>'
+                + '</ul>';
+        } else {
+            resultDiv.innerHTML = '<p style="color: red;">Error: ' + (data.detail || 'Import failed') + '</p>';
+        }
+    } catch (err) {
+        resultDiv.innerHTML = '<p style="color: red;">Error: ' + err.message + '</p>';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Import Data';
+    }
+});
+</script>
+{% endblock %}
