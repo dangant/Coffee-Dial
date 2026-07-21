@@ -18,6 +18,14 @@ class BrewBase(BaseModel):
     bloom: bool = False
     bloom_time_seconds: int | None = None
     bloom_water_ml: float | None = None
+    bloom_pour_time_seconds: int | None = None
+    first_pour_grams: int | None = None
+    first_pour_time_seconds: int | None = None
+    second_pour_grams: int | None = None
+    second_pour_time_seconds: int | None = None
+    final_pour_grams: int | None = None
+    final_pour_time_seconds: int | None = None
+    pour_method: str | None = None
     water_amount_ml: float
     water_temp_f: float | None = None
     water_temp_c: float | None = None
@@ -49,6 +57,14 @@ class BrewUpdate(BaseModel):
     bloom: bool | None = None
     bloom_time_seconds: int | None = None
     bloom_water_ml: float | None = None
+    bloom_pour_time_seconds: int | None = None
+    first_pour_grams: int | None = None
+    first_pour_time_seconds: int | None = None
+    second_pour_grams: int | None = None
+    second_pour_time_seconds: int | None = None
+    final_pour_grams: int | None = None
+    final_pour_time_seconds: int | None = None
+    pour_method: str | None = None
     water_amount_ml: float | None = None
     water_temp_f: float | None = None
     water_temp_c: float | None = None

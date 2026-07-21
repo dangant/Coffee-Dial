@@ -121,10 +121,15 @@
                 <label>Brew Method *</label>
                 <select name="brew_method" required>
                     <option value="">— Select —</option>
-                    {% for m in ["Pour Over", "Espresso", "French Press", "AeroPress", "Moka Pot", "Cold Brew", "Drip", "Siphon", "Other"] %}
-                    <option value="{{ m }}" {{ 'selected' if brew and brew.brew_method == m else '' }}>{{ m }}</option>
+                    {% for m in brew_methods %}
+                    <option value="{{ m.name }}" {{ 'selected' if brew and brew.brew_method == m.name else '' }}>{{ m.name }}</option>
                     {% endfor %}
                 </select>
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; align-items: center;">
+                    <input type="text" id="new-method-input" placeholder="Or add new method..." style="flex: 1;"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();addBrewMethod();}">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="addBrewMethod()">Add</button>
+                </div>
             </div>
             <div class="form-group">
                 <label>Brew Device</label>
@@ -134,6 +139,11 @@
                     <option value="{{ device.name }}" {{ 'selected' if brew and brew.brew_device == device.name else '' }}>{{ device.name }}</option>
                     {% endfor %}
                 </select>
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; align-items: center;">
+                    <input type="text" id="new-device-input" placeholder="Or add new device..." style="flex: 1;"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();addBrewDevice();}">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="addBrewDevice()">Add</button>
+                </div>
             </div>
             <div class="form-group">
                 <label>
@@ -164,12 +174,65 @@
 
         <div id="bloom-fields" class="form-grid" style="{{ '' if brew and brew.bloom else 'display: none;' }} margin-top: 1rem;">
             <div class="form-group">
-                <label>Bloom Time (seconds)</label>
+                <label>Bloom Duration (seconds)</label>
                 <input type="number" name="bloom_time_seconds" value="{{ brew.bloom_time_seconds or '' if brew else '' }}" placeholder="e.g., 30">
             </div>
             <div class="form-group">
-                <label>Bloom Water (ml)</label>
-                <input type="number" step="0.1" name="bloom_water_ml" value="{{ brew.bloom_water_ml or '' if brew else '' }}" placeholder="e.g., 50">
+                <label>Bloom Water (g)</label>
+                <input type="number" name="bloom_water_ml" value="{{ brew.bloom_water_ml or '' if brew else '' }}" placeholder="e.g., 50">
+            </div>
+            <div class="form-group">
+                <label>Bloom Pour Time</label>
+                {% set _bpt = brew.bloom_pour_time_seconds if brew else None %}
+                <input type="text" name="bloom_pour_time_seconds"
+                    value="{{ '%d:%02d'|format(_bpt // 60, _bpt % 60) if _bpt else '' }}"
+                    placeholder="e.g., 0:00" pattern="[0-9]+(?::[0-5][0-9])?">
+            </div>
+        </div>
+
+        <h3 style="margin: 1.5rem 0 1rem; color: var(--primary);">Pour Schedule</h3>
+        <div class="form-grid">
+            <div class="form-group">
+                <label>First Pour Water (g)</label>
+                <input type="number" name="first_pour_grams" value="{{ brew.first_pour_grams or '' if brew else '' }}" placeholder="e.g., 100">
+            </div>
+            <div class="form-group">
+                <label>First Pour Time</label>
+                {% set _fpt = brew.first_pour_time_seconds if brew else None %}
+                <input type="text" name="first_pour_time_seconds"
+                    value="{{ '%d:%02d'|format(_fpt // 60, _fpt % 60) if _fpt else '' }}"
+                    placeholder="e.g., 0:45" pattern="[0-9]+(?::[0-5][0-9])?">
+            </div>
+            <div class="form-group">
+                <label>Second Pour Water (g)</label>
+                <input type="number" name="second_pour_grams" value="{{ brew.second_pour_grams or '' if brew else '' }}" placeholder="e.g., 100">
+            </div>
+            <div class="form-group">
+                <label>Second Pour Time</label>
+                {% set _spt = brew.second_pour_time_seconds if brew else None %}
+                <input type="text" name="second_pour_time_seconds"
+                    value="{{ '%d:%02d'|format(_spt // 60, _spt % 60) if _spt else '' }}"
+                    placeholder="e.g., 1:30" pattern="[0-9]+(?::[0-5][0-9])?">
+            </div>
+            <div class="form-group">
+                <label>Final Pour Water (g)</label>
+                <input type="number" name="final_pour_grams" value="{{ brew.final_pour_grams or '' if brew else '' }}" placeholder="e.g., 100">
+            </div>
+            <div class="form-group">
+                <label>Final Pour Time</label>
+                {% set _lpt = brew.final_pour_time_seconds if brew else None %}
+                <input type="text" name="final_pour_time_seconds"
+                    value="{{ '%d:%02d'|format(_lpt // 60, _lpt % 60) if _lpt else '' }}"
+                    placeholder="e.g., 2:15" pattern="[0-9]+(?::[0-5][0-9])?">
+            </div>
+            <div class="form-group">
+                <label>Pour Method</label>
+                <select name="pour_method">
+                    <option value="">—</option>
+                    {% for pm in ["Swirl", "Center to Swirl"] %}
+                    <option value="{{ pm }}" {{ 'selected' if brew and brew.pour_method == pm else '' }}>{{ pm }}</option>
+                    {% endfor %}
+                </select>
             </div>
         </div>
 

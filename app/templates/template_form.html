@@ -105,10 +105,15 @@
                 <label>Brew Method</label>
                 <select name="brew_method">
                     <option value="">—</option>
-                    {% for m in ["Pour Over", "Espresso", "French Press", "AeroPress", "Moka Pot", "Cold Brew", "Drip", "Siphon", "Other"] %}
-                    <option value="{{ m }}" {{ 'selected' if template and template.brew_method == m else '' }}>{{ m }}</option>
+                    {% for m in brew_methods %}
+                    <option value="{{ m.name }}" {{ 'selected' if template and template.brew_method == m.name else '' }}>{{ m.name }}</option>
                     {% endfor %}
                 </select>
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; align-items: center;">
+                    <input type="text" id="new-method-input" placeholder="Or add new method..." style="flex: 1;"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();addBrewMethod();}">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="addBrewMethod()">Add</button>
+                </div>
             </div>
             <div class="form-group">
                 <label>Brew Device</label>

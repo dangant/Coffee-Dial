@@ -226,6 +226,33 @@ async function addBrewDevice() {
     }
 }
 
+// Inline add brew method via API
+async function addBrewMethod() {
+    const input = document.getElementById('new-method-input');
+    const name = input.value.trim();
+    if (!name) return;
+    try {
+        const resp = await fetch('/api/v1/lookups/brew-methods', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }),
+        });
+        if (!resp.ok) return;
+        const method = await resp.json();
+        const select = document.querySelector('select[name="brew_method"]');
+        if (select) {
+            const opt = document.createElement('option');
+            opt.value = method.name;
+            opt.textContent = method.name;
+            opt.selected = true;
+            select.appendChild(opt);
+        }
+        input.value = '';
+    } catch (e) {
+        console.error('Failed to add brew method:', e);
+    }
+}
+
 // Inline add grinder via API
 async function addGrinder() {
     const input = document.getElementById('new-grinder-input');

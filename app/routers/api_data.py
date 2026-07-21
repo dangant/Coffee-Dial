@@ -13,7 +13,7 @@ from app.models.brew import Brew
 from app.models.rating import Rating
 from app.models.template import BrewTemplate
 from app.models.inventory import BeanInventory
-from app.models.lookups import FlavorNote, BrewDevice, Grinder
+from app.models.lookups import FlavorNote, BrewDevice, Grinder, BrewMethod
 
 router = APIRouter(prefix="/api/v1/data", tags=["data"])
 
@@ -40,6 +40,7 @@ def export_all(db: Session = Depends(get_db)):
     inventory = [_row_to_dict(i) for i in db.query(BeanInventory).all()]
     flavor_notes = [_row_to_dict(f) for f in db.query(FlavorNote).all()]
     brew_devices = [_row_to_dict(d) for d in db.query(BrewDevice).all()]
+    brew_methods = [_row_to_dict(m) for m in db.query(BrewMethod).all()]
     grinders = [_row_to_dict(g) for g in db.query(Grinder).all()]
 
     payload = {
@@ -51,6 +52,7 @@ def export_all(db: Session = Depends(get_db)):
         "bean_inventory": inventory,
         "flavor_notes": flavor_notes,
         "brew_devices": brew_devices,
+        "brew_methods": brew_methods,
         "grinders": grinders,
     }
 
@@ -96,6 +98,7 @@ def import_all(file: UploadFile = File(...), db: Session = Depends(get_db)):
     db.query(BeanInventory).delete()
     db.query(FlavorNote).delete()
     db.query(BrewDevice).delete()
+    db.query(BrewMethod).delete()
     db.query(Grinder).delete()
     db.flush()
 
@@ -109,6 +112,10 @@ def import_all(file: UploadFile = File(...), db: Session = Depends(get_db)):
     for item in data.get("brew_devices", []):
         db.add(BrewDevice(id=item["id"], name=item["name"]))
     counts["brew_devices"] = len(data.get("brew_devices", []))
+
+    for item in data.get("brew_methods", []):
+        db.add(BrewMethod(id=item["id"], name=item["name"]))
+    counts["brew_methods"] = len(data.get("brew_methods", []))
 
     for item in data.get("grinders", []):
         db.add(Grinder(id=item["id"], name=item["name"]))
@@ -167,6 +174,14 @@ def import_all(file: UploadFile = File(...), db: Session = Depends(get_db)):
             bloom=b.get("bloom", False),
             bloom_time_seconds=b.get("bloom_time_seconds"),
             bloom_water_ml=b.get("bloom_water_ml"),
+            bloom_pour_time_seconds=b.get("bloom_pour_time_seconds"),
+            first_pour_grams=b.get("first_pour_grams"),
+            first_pour_time_seconds=b.get("first_pour_time_seconds"),
+            second_pour_grams=b.get("second_pour_grams"),
+            second_pour_time_seconds=b.get("second_pour_time_seconds"),
+            final_pour_grams=b.get("final_pour_grams"),
+            final_pour_time_seconds=b.get("final_pour_time_seconds"),
+            pour_method=b.get("pour_method"),
             water_amount_ml=b["water_amount_ml"],
             water_temp_f=b.get("water_temp_f"),
             water_temp_c=b.get("water_temp_c"),

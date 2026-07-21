@@ -46,3 +46,13 @@ def list_brew_devices(db: Session = Depends(get_db)):
 @router.post("/brew-devices", response_model=LookupItem, status_code=201)
 def add_brew_device(data: LookupCreate, db: Session = Depends(get_db)):
     return lookup_service.add_brew_device(db, data.name.strip())
+
+
+@router.get("/brew-methods", response_model=list[LookupItem])
+def list_brew_methods(db: Session = Depends(get_db)):
+    return lookup_service.list_brew_methods(db)
+
+
+@router.post("/brew-methods", response_model=LookupItem, status_code=201)
+def add_brew_method(data: LookupCreate, db: Session = Depends(get_db)):
+    return lookup_service.add_brew_method(db, data.name.strip())

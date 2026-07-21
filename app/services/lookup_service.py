@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.models.lookups import BrewDevice, FlavorNote, Grinder
+from app.models.lookups import BrewDevice, BrewMethod, FlavorNote, Grinder
 
 
 def list_flavor_notes(db: Session) -> list[FlavorNote]:
@@ -48,6 +48,21 @@ def add_grinder(db: Session, name: str) -> Grinder:
     return grinder
 
 
+def list_brew_methods(db: Session) -> list[BrewMethod]:
+    return db.query(BrewMethod).order_by(BrewMethod.name).all()
+
+
+def add_brew_method(db: Session, name: str) -> BrewMethod:
+    existing = db.query(BrewMethod).filter(BrewMethod.name == name).first()
+    if existing:
+        return existing
+    method = BrewMethod(name=name)
+    db.add(method)
+    db.commit()
+    db.refresh(method)
+    return method
+
+
 def seed_lookups(db: Session) -> None:
     """Seed default flavor notes and brew devices if none exist."""
     if db.query(FlavorNote).count() == 0:
@@ -79,10 +94,14 @@ def seed_lookups(db: Session) -> None:
 
     if db.query(BrewDevice).count() == 0:
         defaults = [
-            "Chemex", "Flair Espresso", "V60", "Kalita Wave",
-            "AeroPress", "French Press", "Moka Pot", "Clever Dripper",
-            "Origami", "Fellow Stagg", "Siphon", "Breville Barista Express",
+            "Flair Espresso", "Chemex", "V60 01", "V60 02", "Kalita Wave 185",
         ]
         for name in defaults:
             db.add(BrewDevice(name=name))
+        db.commit()
+
+    if db.query(BrewMethod).count() == 0:
+        defaults = ["Pour Over", "Espresso"]
+        for name in defaults:
+            db.add(BrewMethod(name=name))
         db.commit()

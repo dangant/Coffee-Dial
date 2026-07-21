@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-# from app.auth import AuthMiddleware, router as auth_router
+from app.auth import AuthMiddleware, router as auth_router
 from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.routers import (
@@ -43,6 +43,44 @@ with engine.connect() as conn:
         conn.execute(text("ALTER TABLE ratings ADD COLUMN flavor_notes_accuracy FLOAT"))
         conn.commit()
 
+    # Add per-pour schedule columns to existing brews tables
+    if "brews" in tables:
+        brew_cols = [c["name"] for c in inspector.get_columns("brews")]
+        pour_columns = {
+            "bloom_pour_time_seconds": "INTEGER",
+            "first_pour_grams": "INTEGER",
+            "first_pour_time_seconds": "INTEGER",
+            "second_pour_grams": "INTEGER",
+            "second_pour_time_seconds": "INTEGER",
+            "final_pour_grams": "INTEGER",
+            "final_pour_time_seconds": "INTEGER",
+            "pour_method": "VARCHAR(50)",
+        }
+        for col, col_type in pour_columns.items():
+            if col not in brew_cols:
+                conn.execute(text(f"ALTER TABLE brews ADD COLUMN {col} {col_type}"))
+        conn.commit()
+
+    # Reconcile brew_devices to the current preferred set on already-seeded DBs.
+    # brew.brew_device is stored as a plain string, so removing lookup rows does
+    # not affect existing brews — it only changes what the dropdown offers.
+    if "brew_devices" in tables:
+        desired_devices = ["Flair Espresso", "Chemex", "V60 01", "V60 02", "Kalita Wave 185"]
+        retired_devices = [
+            "V60", "Kalita Wave", "AeroPress", "French Press", "Moka Pot",
+            "Clever Dripper", "Origami", "Fellow Stagg", "Siphon",
+            "Breville Barista Express",
+        ]
+        for name in retired_devices:
+            conn.execute(text("DELETE FROM brew_devices WHERE name = :n"), {"n": name})
+        for name in desired_devices:
+            exists = conn.execute(
+                text("SELECT 1 FROM brew_devices WHERE name = :n"), {"n": name}
+            ).first()
+            if not exists:
+                conn.execute(text("INSERT INTO brew_devices (name) VALUES (:n)"), {"n": name})
+        conn.commit()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -57,14 +95,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.app_title, lifespan=lifespan)
 
-# Auth middleware (disabled for debugging)
-# app.add_middleware(AuthMiddleware)
+# Auth middleware
+app.add_middleware(AuthMiddleware)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-# Auth routes (disabled for debugging)
-# app.include_router(auth_router)
+# Auth routes
+app.include_router(auth_router)
 
 # Health check
 @app.get("/health")
