@@ -163,7 +163,7 @@
                 {% set _bt = brew.brew_time_seconds if brew else None %}
                 <input type="text" name="brew_time_seconds"
                     value="{{ '%d:%02d'|format(_bt // 60, _bt % 60) if _bt else '' }}"
-                    placeholder="e.g., 3:30 or 210" pattern="[0-9]+(?::[0-5][0-9])?">
+                    placeholder="e.g., 3:30 or 210" pattern="[0-9]*:?[0-9]*" title="Seconds (90) or m:ss (1:30)" inputmode="numeric">
             </div>
             <div class="toggle-group">
                 <input type="checkbox" name="bloom" id="bloom-toggle" {{ 'checked' if brew and brew.bloom else '' }}
@@ -186,7 +186,7 @@
                 {% set _bpt = brew.bloom_pour_time_seconds if brew else None %}
                 <input type="text" name="bloom_pour_time_seconds"
                     value="{{ '%d:%02d'|format(_bpt // 60, _bpt % 60) if _bpt else '' }}"
-                    placeholder="e.g., 0:00" pattern="[0-9]+(?::[0-5][0-9])?">
+                    placeholder="e.g., 0:00" pattern="[0-9]*:?[0-9]*" title="Seconds (90) or m:ss (1:30)" inputmode="numeric">
             </div>
         </div>
 
@@ -201,7 +201,7 @@
                 {% set _fpt = brew.first_pour_time_seconds if brew else None %}
                 <input type="text" name="first_pour_time_seconds"
                     value="{{ '%d:%02d'|format(_fpt // 60, _fpt % 60) if _fpt else '' }}"
-                    placeholder="e.g., 0:45" pattern="[0-9]+(?::[0-5][0-9])?">
+                    placeholder="e.g., 0:45" pattern="[0-9]*:?[0-9]*" title="Seconds (90) or m:ss (1:30)" inputmode="numeric">
             </div>
             <div class="form-group">
                 <label>Second Pour Water (g)</label>
@@ -212,7 +212,7 @@
                 {% set _spt = brew.second_pour_time_seconds if brew else None %}
                 <input type="text" name="second_pour_time_seconds"
                     value="{{ '%d:%02d'|format(_spt // 60, _spt % 60) if _spt else '' }}"
-                    placeholder="e.g., 1:30" pattern="[0-9]+(?::[0-5][0-9])?">
+                    placeholder="e.g., 1:30" pattern="[0-9]*:?[0-9]*" title="Seconds (90) or m:ss (1:30)" inputmode="numeric">
             </div>
             <div class="form-group">
                 <label>Final Pour Water (g)</label>
@@ -223,7 +223,7 @@
                 {% set _lpt = brew.final_pour_time_seconds if brew else None %}
                 <input type="text" name="final_pour_time_seconds"
                     value="{{ '%d:%02d'|format(_lpt // 60, _lpt % 60) if _lpt else '' }}"
-                    placeholder="e.g., 2:15" pattern="[0-9]+(?::[0-5][0-9])?">
+                    placeholder="e.g., 2:15" pattern="[0-9]*:?[0-9]*" title="Seconds (90) or m:ss (1:30)" inputmode="numeric">
             </div>
             <div class="form-group">
                 <label>Pour Method</label>

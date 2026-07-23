@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -23,14 +23,42 @@ router = APIRouter(tags=["pages"])
 templates = Jinja2Templates(directory="app/templates")
 
 
-def _parse_time_seconds(value: str) -> int | None:
-    """Parse a time string as plain seconds (e.g. '254') or m:ss (e.g. '4:14')."""
-    if not value:
+def _parse_time_seconds(value: str, field: str = "time") -> int | None:
+    """Parse a time entry as plain seconds ('254') or m:ss ('4:14', '1:5', ':45').
+
+    Forgiving about how it is typed — surrounding spaces, a missing minutes or
+    seconds half, and a trailing 's'/'sec' are all accepted. Anything genuinely
+    unparseable raises a 400 with a readable message rather than a 500.
+    """
+    if value is None:
         return None
-    if ":" in value:
-        parts = value.split(":", 1)
-        return int(parts[0]) * 60 + int(parts[1])
-    return int(value)
+    raw = value.strip().lower().removesuffix("seconds").removesuffix("secs")
+    raw = raw.removesuffix("sec").removesuffix("s").strip()
+    if not raw:
+        return None
+    try:
+        if ":" in raw:
+            minutes, _, seconds = raw.partition(":")
+            return int(minutes or 0) * 60 + int(seconds or 0)
+        return int(float(raw))
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not read {field} value {value!r}. Use seconds (90) or m:ss (1:30).",
+        )
+
+
+def _parse_int(value: str, field: str) -> int | None:
+    """Parse a whole-number entry, rounding decimals ('100.5' -> 100)."""
+    if value is None or not value.strip():
+        return None
+    try:
+        return int(float(value.strip()))
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not read {field} value {value!r}. Enter a number.",
+        )
 
 
 def _get_lookups(db: Session) -> dict:
@@ -145,24 +173,24 @@ def create_brew_form(
         grind_setting=grind_setting or None,
         grinder=grinder or None,
         bloom=bloom == "on",
-        bloom_time_seconds=int(bloom_time_seconds) if bloom_time_seconds else None,
+        bloom_time_seconds=_parse_time_seconds(bloom_time_seconds, "bloom duration"),
         bloom_water_ml=float(bloom_water_ml) if bloom_water_ml else None,
-        bloom_pour_time_seconds=_parse_time_seconds(bloom_pour_time_seconds),
-        first_pour_grams=int(first_pour_grams) if first_pour_grams else None,
-        first_pour_time_seconds=_parse_time_seconds(first_pour_time_seconds),
-        second_pour_grams=int(second_pour_grams) if second_pour_grams else None,
-        second_pour_time_seconds=_parse_time_seconds(second_pour_time_seconds),
-        final_pour_grams=int(final_pour_grams) if final_pour_grams else None,
-        final_pour_time_seconds=_parse_time_seconds(final_pour_time_seconds),
+        bloom_pour_time_seconds=_parse_time_seconds(bloom_pour_time_seconds, "bloom pour time"),
+        first_pour_grams=_parse_int(first_pour_grams, "first pour water"),
+        first_pour_time_seconds=_parse_time_seconds(first_pour_time_seconds, "first pour time"),
+        second_pour_grams=_parse_int(second_pour_grams, "second pour water"),
+        second_pour_time_seconds=_parse_time_seconds(second_pour_time_seconds, "second pour time"),
+        final_pour_grams=_parse_int(final_pour_grams, "final pour water"),
+        final_pour_time_seconds=_parse_time_seconds(final_pour_time_seconds, "final pour time"),
         pour_method=pour_method or None,
         water_amount_ml=water_amount_ml,
         water_temp_f=temp_f,
         water_temp_c=temp_c,
         brew_method=brew_method,
         brew_device=brew_device or None,
-        brew_time_seconds=_parse_time_seconds(brew_time_seconds),
+        brew_time_seconds=_parse_time_seconds(brew_time_seconds, "brew time"),
         water_filter_type=water_filter_type or None,
-        altitude_ft=int(altitude_ft) if altitude_ft else None,
+        altitude_ft=_parse_int(altitude_ft, "altitude"),
         notes=notes or None,
         template_id=int(template_id) if template_id else None,
     )
@@ -256,24 +284,24 @@ def update_brew_form(
         grind_setting=grind_setting or None,
         grinder=grinder or None,
         bloom=bloom == "on",
-        bloom_time_seconds=int(bloom_time_seconds) if bloom_time_seconds else None,
+        bloom_time_seconds=_parse_time_seconds(bloom_time_seconds, "bloom duration"),
         bloom_water_ml=float(bloom_water_ml) if bloom_water_ml else None,
-        bloom_pour_time_seconds=_parse_time_seconds(bloom_pour_time_seconds),
-        first_pour_grams=int(first_pour_grams) if first_pour_grams else None,
-        first_pour_time_seconds=_parse_time_seconds(first_pour_time_seconds),
-        second_pour_grams=int(second_pour_grams) if second_pour_grams else None,
-        second_pour_time_seconds=_parse_time_seconds(second_pour_time_seconds),
-        final_pour_grams=int(final_pour_grams) if final_pour_grams else None,
-        final_pour_time_seconds=_parse_time_seconds(final_pour_time_seconds),
+        bloom_pour_time_seconds=_parse_time_seconds(bloom_pour_time_seconds, "bloom pour time"),
+        first_pour_grams=_parse_int(first_pour_grams, "first pour water"),
+        first_pour_time_seconds=_parse_time_seconds(first_pour_time_seconds, "first pour time"),
+        second_pour_grams=_parse_int(second_pour_grams, "second pour water"),
+        second_pour_time_seconds=_parse_time_seconds(second_pour_time_seconds, "second pour time"),
+        final_pour_grams=_parse_int(final_pour_grams, "final pour water"),
+        final_pour_time_seconds=_parse_time_seconds(final_pour_time_seconds, "final pour time"),
         pour_method=pour_method or None,
         water_amount_ml=water_amount_ml,
         water_temp_f=temp_f,
         water_temp_c=temp_c,
         brew_method=brew_method,
         brew_device=brew_device or None,
-        brew_time_seconds=_parse_time_seconds(brew_time_seconds),
+        brew_time_seconds=_parse_time_seconds(brew_time_seconds, "brew time"),
         water_filter_type=water_filter_type or None,
-        altitude_ft=int(altitude_ft) if altitude_ft else None,
+        altitude_ft=_parse_int(altitude_ft, "altitude"),
         notes=notes or None,
         template_id=int(template_id) if template_id else None,
     )
@@ -402,16 +430,16 @@ def create_template_form(
         grind_setting=grind_setting or None,
         grinder=grinder or None,
         bloom=bloom == "on" if bloom != "off" else None,
-        bloom_time_seconds=int(bloom_time_seconds) if bloom_time_seconds else None,
+        bloom_time_seconds=_parse_time_seconds(bloom_time_seconds, "bloom duration"),
         bloom_water_ml=float(bloom_water_ml) if bloom_water_ml else None,
         water_amount_ml=float(water_amount_ml) if water_amount_ml else None,
         water_temp_f=temp_f,
         water_temp_c=temp_c,
         brew_method=brew_method or None,
         brew_device=brew_device or None,
-        brew_time_seconds=_parse_time_seconds(brew_time_seconds),
+        brew_time_seconds=_parse_time_seconds(brew_time_seconds, "brew time"),
         water_filter_type=water_filter_type or None,
-        altitude_ft=int(altitude_ft) if altitude_ft else None,
+        altitude_ft=_parse_int(altitude_ft, "altitude"),
         notes=notes or None,
     )
     template_service.create_template(db, data)
@@ -482,16 +510,16 @@ def update_template_form(
         grind_setting=grind_setting or None,
         grinder=grinder or None,
         bloom=bloom == "on" if bloom != "off" else None,
-        bloom_time_seconds=int(bloom_time_seconds) if bloom_time_seconds else None,
+        bloom_time_seconds=_parse_time_seconds(bloom_time_seconds, "bloom duration"),
         bloom_water_ml=float(bloom_water_ml) if bloom_water_ml else None,
         water_amount_ml=float(water_amount_ml) if water_amount_ml else None,
         water_temp_f=temp_f,
         water_temp_c=temp_c,
         brew_method=brew_method or None,
         brew_device=brew_device or None,
-        brew_time_seconds=_parse_time_seconds(brew_time_seconds),
+        brew_time_seconds=_parse_time_seconds(brew_time_seconds, "brew time"),
         water_filter_type=water_filter_type or None,
-        altitude_ft=int(altitude_ft) if altitude_ft else None,
+        altitude_ft=_parse_int(altitude_ft, "altitude"),
         notes=notes or None,
     )
     template_service.update_template(db, template_id, data)
