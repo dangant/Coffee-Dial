@@ -11,6 +11,12 @@
 <!-- Add / update a bean -->
 <div class="card" style="margin-bottom: 1.5rem;">
     <h2 style="margin-top:0;">Add or Update a Bean</h2>
+    <div class="form-group" id="template-picker-group" style="max-width:360px; margin-bottom:0.75rem;" hidden>
+        <label>From a Template</label>
+        <select id="template-picker" onchange="prefillFromTemplate(this.value)">
+            <option value="">— Pick a template to fill bean &amp; roaster —</option>
+        </select>
+    </div>
     <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
         <div class="form-group" style="flex:2; min-width:160px; margin:0;">
             <label>Bean Name</label>
@@ -72,6 +78,7 @@
 {% block scripts %}
 <script>
 let shelfData = [];
+let templates = [];
 
 async function loadShelf() {
     const resp = await fetch('/api/v1/shelf');
@@ -80,6 +87,27 @@ async function loadShelf() {
     renderTracked();
     renderUntracked();
     populateSuggestions();
+}
+
+async function loadTemplates() {
+    const resp = await fetch('/api/v1/templates/');
+    templates = (await resp.json()).filter(t => t.bean_name);
+    const picker = document.getElementById('template-picker');
+    const group = document.getElementById('template-picker-group');
+    if (!templates.length) { group.hidden = true; return; }
+    group.hidden = false;
+    picker.innerHTML = '<option value="">— Pick a template to fill bean &amp; roaster —</option>'
+        + templates.map(t => {
+            const label = t.roaster ? `${t.roaster} — ${t.bean_name}` : t.bean_name;
+            return `<option value="${t.id}">${esc(label)}</option>`;
+        }).join('');
+}
+
+function prefillFromTemplate(id) {
+    if (!id) return;
+    const tpl = templates.find(t => String(t.id) === String(id));
+    if (!tpl) return;
+    prefill(tpl.bean_name || '', tpl.roaster || '');
 }
 
 function renderSummary() {
@@ -228,5 +256,6 @@ async function removeEntry(id) {
 function esc(s) { return (s || '').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
 
 loadShelf();
+loadTemplates();
 </script>
 {% endblock %}
