@@ -13,6 +13,7 @@ class BeanInventory(Base):
     bean_name: Mapped[str] = mapped_column(String(200), nullable=False)
     roaster: Mapped[str | None] = mapped_column(String(200), nullable=True)
     initial_amount_grams: Mapped[float] = mapped_column(Float, nullable=False)
+    price: Mapped[float | None] = mapped_column(Float, nullable=True)  # price per bag, dollars
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

@@ -11,7 +11,11 @@ ESPRESSO_GRAMS = 18.0
 
 
 def upsert_inventory(
-    db: Session, bean_name: str, roaster: str | None, initial_grams: float
+    db: Session,
+    bean_name: str,
+    roaster: str | None,
+    initial_grams: float,
+    price: float | None = None,
 ) -> BeanInventory:
     inv = (
         db.query(BeanInventory)
@@ -20,9 +24,12 @@ def upsert_inventory(
     )
     if inv:
         inv.initial_amount_grams = initial_grams
+        if price is not None:
+            inv.price = price
     else:
         inv = BeanInventory(
-            bean_name=bean_name, roaster=roaster, initial_amount_grams=initial_grams
+            bean_name=bean_name, roaster=roaster,
+            initial_amount_grams=initial_grams, price=price,
         )
         db.add(inv)
     db.commit()
@@ -74,6 +81,7 @@ def list_shelf(db: Session) -> list[dict]:
                 "bean_name": inv.bean_name,
                 "roaster": inv.roaster,
                 "initial_grams": inv.initial_amount_grams,
+                "price": inv.price,
                 "used_grams": round(used, 1),
                 "remaining_grams": round(remaining, 1),
                 "tracked": True,
@@ -89,6 +97,7 @@ def list_shelf(db: Session) -> list[dict]:
                     "bean_name": bean_name,
                     "roaster": roaster,
                     "initial_grams": None,
+                    "price": None,
                     "used_grams": round(used, 1),
                     "remaining_grams": None,
                     "tracked": False,

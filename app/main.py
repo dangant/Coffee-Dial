@@ -62,6 +62,32 @@ with engine.connect() as conn:
                 conn.execute(text(f"ALTER TABLE brews ADD COLUMN {col} {col_type}"))
         conn.commit()
 
+    # Add per-pour schedule + grind suggestion columns to existing brew_templates tables
+    if "brew_templates" in tables:
+        tpl_cols = [c["name"] for c in inspector.get_columns("brew_templates")]
+        tpl_columns = {
+            "bloom_pour_time_seconds": "INTEGER",
+            "first_pour_grams": "INTEGER",
+            "first_pour_time_seconds": "INTEGER",
+            "second_pour_grams": "INTEGER",
+            "second_pour_time_seconds": "INTEGER",
+            "final_pour_grams": "INTEGER",
+            "final_pour_time_seconds": "INTEGER",
+            "pour_method": "VARCHAR(50)",
+            "grind_suggestion_um": "INTEGER",
+        }
+        for col, col_type in tpl_columns.items():
+            if col not in tpl_cols:
+                conn.execute(text(f"ALTER TABLE brew_templates ADD COLUMN {col} {col_type}"))
+        conn.commit()
+
+    # Add price column to existing bean_inventory tables
+    if "bean_inventory" in tables:
+        inv_cols = [c["name"] for c in inspector.get_columns("bean_inventory")]
+        if "price" not in inv_cols:
+            conn.execute(text("ALTER TABLE bean_inventory ADD COLUMN price FLOAT"))
+            conn.commit()
+
     # Reconcile brew_devices to the current preferred set on already-seeded DBs.
     # brew.brew_device is stored as a plain string, so removing lookup rows does
     # not affect existing brews — it only changes what the dropdown offers.

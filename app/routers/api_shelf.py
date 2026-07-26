@@ -14,6 +14,7 @@ class InventoryUpsert(BaseModel):
     bean_name: str
     roaster: Optional[str] = None
     initial_amount_grams: float
+    price: Optional[float] = None
 
 
 @router.get("/lp")
@@ -40,14 +41,18 @@ def list_shelf(db: Session = Depends(get_db)):
 def set_inventory(body: InventoryUpsert, db: Session = Depends(get_db)):
     if body.initial_amount_grams < 0:
         raise HTTPException(status_code=400, detail="Amount must be non-negative")
+    if body.price is not None and body.price < 0:
+        raise HTTPException(status_code=400, detail="Price must be non-negative")
     inv = inventory_service.upsert_inventory(
-        db, body.bean_name, body.roaster or None, body.initial_amount_grams
+        db, body.bean_name, body.roaster or None, body.initial_amount_grams,
+        price=body.price,
     )
     return {
         "id": inv.id,
         "bean_name": inv.bean_name,
         "roaster": inv.roaster,
         "initial_amount_grams": inv.initial_amount_grams,
+        "price": inv.price,
     }
 
 

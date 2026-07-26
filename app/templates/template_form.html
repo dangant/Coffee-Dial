@@ -88,6 +88,10 @@
                 <input type="text" name="grind_setting" value="{{ template.grind_setting or '' if template else '' }}" placeholder="e.g., 1.3.5" pattern="[0-9]+\.[0-9]+\.[0-9]+">
             </div>
             <div class="form-group">
+                <label>Grind Suggestion (µm)</label>
+                <input type="number" name="grind_suggestion_um" value="{{ template.grind_suggestion_um or '' if template else '' }}" placeholder="e.g., 800">
+            </div>
+            <div class="form-group">
                 <label>Grinder</label>
                 <select name="grinder">
                     <option value="">—</option>
@@ -145,17 +149,20 @@
                 <label>Brew Time (seconds)</label>
                 <input type="number" name="brew_time_seconds" value="{{ template.brew_time_seconds or '' if template else '' }}">
             </div>
-            <div class="toggle-group">
-                <input type="checkbox" name="bloom" id="bloom-toggle" {{ 'checked' if template and template.bloom else '' }}>
-                <label for="bloom-toggle" style="font-weight: 600;">Bloom</label>
+            <div class="form-group">
+                <label>Bloom Duration (seconds)</label>
+                <input type="number" name="bloom_time_seconds" value="{{ template.bloom_time_seconds or '' if template else '' }}" placeholder="e.g., 30">
             </div>
             <div class="form-group">
-                <label>Bloom Time (seconds)</label>
-                <input type="number" name="bloom_time_seconds" value="{{ template.bloom_time_seconds or '' if template else '' }}">
+                <label>Bloom Water (g)</label>
+                <input type="number" name="bloom_water_ml" value="{{ template.bloom_water_ml or '' if template else '' }}" placeholder="e.g., 50">
             </div>
             <div class="form-group">
-                <label>Bloom Water (ml)</label>
-                <input type="number" step="0.1" name="bloom_water_ml" value="{{ template.bloom_water_ml or '' if template else '' }}">
+                <label>Bloom Pour Time</label>
+                {% set _bpt = template.bloom_pour_time_seconds if template else None %}
+                <input type="text" name="bloom_pour_time_seconds"
+                    value="{{ '%d:%02d'|format(_bpt // 60, _bpt % 60) if _bpt else '' }}"
+                    placeholder="e.g., 0:00" pattern="[0-9]*:?[0-9]*" title="Seconds (90) or m:ss (1:30)" inputmode="numeric">
             </div>
             <div class="form-group">
                 <label>Water Filter</label>
@@ -168,6 +175,53 @@
             <div class="form-group full-width">
                 <label>Notes</label>
                 <textarea name="notes">{{ template.notes or '' if template else '' }}</textarea>
+            </div>
+        </div>
+
+        <h3 style="margin: 1.5rem 0 1rem; color: var(--primary);">Pour Schedule</h3>
+        <p style="color: var(--text-muted, #888); font-size: 0.85rem; margin: -0.5rem 0 1rem;">Pour amounts are cumulative scale readings — the total water on the scale at each pour.</p>
+        <div class="form-grid">
+            <div class="form-group">
+                <label>First Pour — Total Water (g)</label>
+                <input type="number" name="first_pour_grams" value="{{ template.first_pour_grams or '' if template else '' }}" placeholder="cumulative, e.g., 160">
+            </div>
+            <div class="form-group">
+                <label>First Pour Time</label>
+                {% set _fpt = template.first_pour_time_seconds if template else None %}
+                <input type="text" name="first_pour_time_seconds"
+                    value="{{ '%d:%02d'|format(_fpt // 60, _fpt % 60) if _fpt else '' }}"
+                    placeholder="e.g., 0:45" pattern="[0-9]*:?[0-9]*" title="Seconds (90) or m:ss (1:30)" inputmode="numeric">
+            </div>
+            <div class="form-group">
+                <label>Second Pour — Total Water (g)</label>
+                <input type="number" name="second_pour_grams" value="{{ template.second_pour_grams or '' if template else '' }}" placeholder="cumulative, e.g., 260">
+            </div>
+            <div class="form-group">
+                <label>Second Pour Time</label>
+                {% set _spt = template.second_pour_time_seconds if template else None %}
+                <input type="text" name="second_pour_time_seconds"
+                    value="{{ '%d:%02d'|format(_spt // 60, _spt % 60) if _spt else '' }}"
+                    placeholder="e.g., 1:30" pattern="[0-9]*:?[0-9]*" title="Seconds (90) or m:ss (1:30)" inputmode="numeric">
+            </div>
+            <div class="form-group">
+                <label>Final Pour — Total Water (g)</label>
+                <input type="number" name="final_pour_grams" value="{{ template.final_pour_grams or '' if template else '' }}" placeholder="cumulative, e.g., 400">
+            </div>
+            <div class="form-group">
+                <label>Final Pour Time</label>
+                {% set _lpt = template.final_pour_time_seconds if template else None %}
+                <input type="text" name="final_pour_time_seconds"
+                    value="{{ '%d:%02d'|format(_lpt // 60, _lpt % 60) if _lpt else '' }}"
+                    placeholder="e.g., 2:15" pattern="[0-9]*:?[0-9]*" title="Seconds (90) or m:ss (1:30)" inputmode="numeric">
+            </div>
+            <div class="form-group">
+                <label>Pour Method</label>
+                <select name="pour_method">
+                    <option value="">—</option>
+                    {% for pm in ["Swirl", "Center to Swirl"] %}
+                    <option value="{{ pm }}" {{ 'selected' if template and template.pour_method == pm else '' }}>{{ pm }}</option>
+                    {% endfor %}
+                </select>
             </div>
         </div>
 

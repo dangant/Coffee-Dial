@@ -3,7 +3,11 @@ function resetBrewForm() {
     const allFields = [
         'roaster', 'bean_name', 'bean_origin', 'bean_process', 'roast_date',
         'roast_level', 'bean_amount_grams', 'grind_setting', 'grinder',
-        'bloom_time_seconds', 'bloom_water_ml', 'water_amount_ml',
+        'bloom_time_seconds', 'bloom_water_ml', 'bloom_pour_time_seconds',
+        'first_pour_grams', 'first_pour_time_seconds',
+        'second_pour_grams', 'second_pour_time_seconds',
+        'final_pour_grams', 'final_pour_time_seconds', 'pour_method',
+        'water_amount_ml',
         'brew_method', 'brew_device', 'water_filter_type', 'altitude_ft',
     ];
     allFields.forEach(name => {
@@ -19,11 +23,6 @@ function resetBrewForm() {
     toggleTemp('F');
     document.querySelectorAll('[name="flavor_notes_expected"]').forEach(cb => cb.checked = false);
     enforceCheckboxLimit(4);
-    const bloomEl = document.getElementById('bloom-toggle');
-    if (bloomEl) {
-        bloomEl.checked = false;
-        document.getElementById('bloom-fields').style.display = 'none';
-    }
     const tplIdEl = document.querySelector('[name="template_id"]');
     if (tplIdEl) tplIdEl.value = '';
 }
@@ -45,6 +44,8 @@ async function loadTemplate(selectEl) {
             grinder: 'grinder', bloom_time_seconds: 'bloom_time_seconds',
             bloom_water_ml: 'bloom_water_ml', water_amount_ml: 'water_amount_ml',
             brew_method: 'brew_method', brew_device: 'brew_device',
+            first_pour_grams: 'first_pour_grams', second_pour_grams: 'second_pour_grams',
+            final_pour_grams: 'final_pour_grams', pour_method: 'pour_method',
             water_filter_type: 'water_filter_type',
             altitude_ft: 'altitude_ft', notes: 'notes',
         };
@@ -52,13 +53,17 @@ async function loadTemplate(selectEl) {
             const el = document.querySelector(`[name="${formName}"]`);
             if (el && data[key] != null) el.value = data[key];
         }
-        // Handle brew_time_seconds as m:ss
-        if (data.brew_time_seconds != null) {
-            const btEl = document.querySelector('[name="brew_time_seconds"]');
-            if (btEl) {
-                const m = Math.floor(data.brew_time_seconds / 60);
-                const s = data.brew_time_seconds % 60;
-                btEl.value = `${m}:${String(s).padStart(2, '0')}`;
+        // Time fields render as m:ss
+        for (const field of ['brew_time_seconds', 'bloom_pour_time_seconds',
+                             'first_pour_time_seconds', 'second_pour_time_seconds',
+                             'final_pour_time_seconds']) {
+            if (data[field] != null) {
+                const el = document.querySelector(`[name="${field}"]`);
+                if (el) {
+                    const m = Math.floor(data[field] / 60);
+                    const s = data[field] % 60;
+                    el.value = `${m}:${String(s).padStart(2, '0')}`;
+                }
             }
         }
         // Handle water temp
@@ -78,14 +83,6 @@ async function loadTemplate(selectEl) {
                 cb.checked = notes.includes(cb.value);
             });
             enforceCheckboxLimit(4);
-        }
-        // Handle bloom checkbox and fields visibility
-        if (data.bloom) {
-            const bloomEl = document.getElementById('bloom-toggle');
-            if (bloomEl) {
-                bloomEl.checked = true;
-                document.getElementById('bloom-fields').style.display = '';
-            }
         }
         // Set template_id hidden field
         const tplIdEl = document.querySelector('[name="template_id"]');
@@ -173,11 +170,14 @@ async function addFlavorNote() {
             return;
         }
         const note = await resp.json();
-        // Add new checkbox pill to the container
+        // Add new checkbox pill to the container, pre-selected (adding it means you want it)
+        // unless the 4-note limit is already hit
+        const checkedCount = document.querySelectorAll('[name="flavor_notes_expected"]:checked').length;
+        const checked = checkedCount < 4 ? ' checked' : '';
         const container = document.getElementById('flavor-checkboxes');
         const label = document.createElement('label');
         label.className = 'checkbox-pill';
-        label.innerHTML = `<input type="checkbox" name="flavor_notes_expected" value="${note.name}" onchange="limitCheckboxes(this, 4)"><span>${note.name}</span>`;
+        label.innerHTML = `<input type="checkbox" name="flavor_notes_expected" value="${note.name}"${checked} onchange="limitCheckboxes(this, 4)"><span>${note.name}</span>`;
         container.appendChild(label);
         input.value = '';
         enforceCheckboxLimit(4);

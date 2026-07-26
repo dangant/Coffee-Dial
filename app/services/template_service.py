@@ -8,7 +8,11 @@ from app.schemas.template import TemplateCreate, TemplateUpdate
 TEMPLATE_FIELDS = [
     "roaster", "bean_name", "bean_origin", "bean_process", "roast_date", "roast_level",
     "flavor_notes_expected", "bean_amount_grams", "grind_setting", "grinder",
-    "bloom", "bloom_time_seconds", "bloom_water_ml", "water_amount_ml",
+    "bloom", "bloom_time_seconds", "bloom_water_ml", "bloom_pour_time_seconds",
+    "first_pour_grams", "first_pour_time_seconds",
+    "second_pour_grams", "second_pour_time_seconds",
+    "final_pour_grams", "final_pour_time_seconds", "pour_method",
+    "water_amount_ml",
     "water_temp_f", "water_temp_c", "brew_method", "brew_device",
     "brew_time_seconds", "water_filter_type",
     "altitude_ft", "notes",
@@ -57,6 +61,25 @@ def get_template(db: Session, template_id: int) -> BrewTemplate | None:
 
 def list_templates(db: Session) -> list[BrewTemplate]:
     return db.query(BrewTemplate).order_by(BrewTemplate.name).all()
+
+
+def list_templates_on_shelf(db: Session) -> list[BrewTemplate]:
+    """Templates whose bean is on the shelf with grams remaining.
+
+    Templates without a bean_name are generic recipes, not tied to a bag,
+    and are always included.
+    """
+    from app.services import inventory_service
+
+    in_stock = {
+        (r["bean_name"], r["roaster"])
+        for r in inventory_service.list_shelf(db)
+        if r["tracked"] and (r["remaining_grams"] or 0) > 0
+    }
+    return [
+        t for t in list_templates(db)
+        if not t.bean_name or (t.bean_name, t.roaster) in in_stock
+    ]
 
 
 def update_template(db: Session, template_id: int, data: TemplateUpdate) -> BrewTemplate | None:

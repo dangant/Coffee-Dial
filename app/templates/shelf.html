@@ -26,6 +26,10 @@
             <label>Grams on Shelf</label>
             <input type="number" id="add-grams" min="0" step="0.1" placeholder="e.g. 250">
         </div>
+        <div class="form-group" style="flex:1; min-width:100px; margin:0;">
+            <label>Price ($/bag)</label>
+            <input type="number" id="add-price" min="0" step="0.01" placeholder="e.g. 22.50">
+        </div>
         <button class="btn" style="margin-bottom:0;" onclick="addEntry()">Save</button>
     </div>
     <p id="add-msg" style="margin:0.5rem 0 0; font-size:0.85rem; color:#888;"></p>
@@ -40,13 +44,14 @@
                 <th>Bean</th>
                 <th>Roaster</th>
                 <th>Stocked (g)</th>
+                <th>Price</th>
                 <th>Used (g)</th>
                 <th>Remaining (g)</th>
                 <th></th>
             </tr>
         </thead>
         <tbody id="tracked-body">
-            <tr><td colspan="6" style="text-align:center; color:#888;">Loading…</td></tr>
+            <tr><td colspan="7" style="text-align:center; color:#888;">Loading…</td></tr>
         </tbody>
     </table>
 </div>
@@ -101,7 +106,7 @@ function renderTracked() {
     const rows = shelfData.filter(r => r.tracked);
     const tbody = document.getElementById('tracked-body');
     if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">No beans tracked yet. Add one above.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#888;">No beans tracked yet. Add one above.</td></tr>';
         return;
     }
     tbody.innerHTML = rows.map(r => {
@@ -118,6 +123,17 @@ function renderTracked() {
                         style="width:90px;"
                         onkeydown="if(event.key==='Enter') updateEntry(${r.id}, '${esc(r.bean_name)}', '${esc(r.roaster || '')}')">
                     <button class="btn btn-sm" onclick="updateEntry(${r.id}, '${esc(r.bean_name)}', '${esc(r.roaster || '')}')">Update</button>
+                </div>
+            </td>
+            <td>
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <input type="number" min="0" step="0.01"
+                        id="price-${r.id}"
+                        value="${r.price ?? ''}"
+                        placeholder="$"
+                        style="width:80px;"
+                        onkeydown="if(event.key==='Enter') updateEntry(${r.id}, '${esc(r.bean_name)}', '${esc(r.roaster || '')}')">
+                    ${r.price != null && r.initial_grams > 0 ? `<span style="font-size:0.75rem; color:#888;">$${(r.price / r.initial_grams * 100).toFixed(2)}/100g</span>` : ''}
                 </div>
             </td>
             <td>${r.used_grams}g</td>
@@ -171,6 +187,8 @@ async function addEntry() {
     const bean = document.getElementById('add-bean').value.trim();
     const roaster = document.getElementById('add-roaster').value.trim() || null;
     const grams = parseFloat(document.getElementById('add-grams').value);
+    const priceRaw = document.getElementById('add-price').value;
+    const price = priceRaw === '' ? null : parseFloat(priceRaw);
     const msg = document.getElementById('add-msg');
     if (!bean) { msg.textContent = 'Bean name is required.'; msg.style.color = '#f44336'; return; }
     if (isNaN(grams) || grams < 0) { msg.textContent = 'Enter a valid gram amount.'; msg.style.color = '#f44336'; return; }
@@ -178,11 +196,12 @@ async function addEntry() {
     await fetch('/api/v1/shelf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bean_name: bean, roaster, initial_amount_grams: grams }),
+        body: JSON.stringify({ bean_name: bean, roaster, initial_amount_grams: grams, price }),
     });
     document.getElementById('add-bean').value = '';
     document.getElementById('add-roaster').value = '';
     document.getElementById('add-grams').value = '';
+    document.getElementById('add-price').value = '';
     msg.textContent = `Saved ${grams}g of "${bean}".`;
     msg.style.color = '#4caf50';
     await loadShelf();
@@ -191,10 +210,12 @@ async function addEntry() {
 async function updateEntry(id, bean, roaster) {
     const grams = parseFloat(document.getElementById(`grams-${id}`).value);
     if (isNaN(grams) || grams < 0) return;
+    const priceRaw = document.getElementById(`price-${id}`).value;
+    const price = priceRaw === '' ? null : parseFloat(priceRaw);
     await fetch('/api/v1/shelf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bean_name: bean, roaster: roaster || null, initial_amount_grams: grams }),
+        body: JSON.stringify({ bean_name: bean, roaster: roaster || null, initial_amount_grams: grams, price }),
     });
     await loadShelf();
 }

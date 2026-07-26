@@ -88,15 +88,20 @@
             ("Second Pour", brew.second_pour_grams, brew.second_pour_time_seconds),
             ("Final Pour", brew.final_pour_grams, brew.final_pour_time_seconds),
         ] %}
+        {# Pour grams are cumulative scale readings; show the delta from the previous step #}
+        {% set ns = namespace(prev=brew.bloom_water_ml) %}
         {% for label, grams, secs in _pours %}
         {% if grams is not none or secs is not none %}
         <div class="detail-item">
             <div class="label">{{ label }}</div>
             <div class="value">
-                {%- if grams is not none %}{{ grams }}g{% endif %}
+                {%- if grams is not none %}{{ grams }}g total
+                    {%- if ns.prev is not none and grams - ns.prev >= 0 %} (+{{ (grams - ns.prev)|int }}g){% endif %}
+                {%- endif %}
                 {%- if secs is not none %} @ {{ secs // 60 }}:{{ "%02d"|format(secs % 60) }}{% endif %}
             </div>
         </div>
+        {% if grams is not none %}{% set ns.prev = grams %}{% endif %}
         {% endif %}
         {% endfor %}
         {% if brew.pour_method %}
