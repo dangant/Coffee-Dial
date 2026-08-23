@@ -44,6 +44,9 @@ with engine.connect() as conn:
     if "flavor_notes_accuracy" not in rating_cols:
         conn.execute(text("ALTER TABLE ratings ADD COLUMN flavor_notes_accuracy FLOAT"))
         conn.commit()
+    if "taste_score" not in rating_cols:
+        conn.execute(text("ALTER TABLE ratings ADD COLUMN taste_score FLOAT"))
+        conn.commit()
 
     # Add per-pour schedule columns to existing brews tables
     if "brews" in tables:

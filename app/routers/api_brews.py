@@ -35,6 +35,7 @@ def list_brews(
             bean_name=b.bean_name,
             brew_method=b.brew_method,
             overall_score=b.rating.overall_score if b.rating else None,
+            taste_score=b.rating.taste_score if b.rating else None,
         ))
     return results
 

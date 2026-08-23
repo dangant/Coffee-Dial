@@ -2,7 +2,8 @@ from pydantic import BaseModel, Field
 
 
 class RatingBase(BaseModel):
-    overall_score: float = Field(ge=1, le=10)
+    overall_score: float = Field(ge=1, le=10)  # execution
+    taste_score: float | None = Field(default=None, ge=1, le=10)  # enjoyment, optional
     bitterness: float | None = Field(default=None, ge=1, le=5)
     acidity: float | None = Field(default=None, ge=1, le=5)
     sweetness: float | None = Field(default=None, ge=1, le=5)
@@ -20,6 +21,7 @@ class RatingCreate(RatingBase):
 
 class RatingUpdate(BaseModel):
     overall_score: float | None = Field(default=None, ge=1, le=10)
+    taste_score: float | None = Field(default=None, ge=1, le=10)
     bitterness: float | None = Field(default=None, ge=1, le=5)
     acidity: float | None = Field(default=None, ge=1, le=5)
     sweetness: float | None = Field(default=None, ge=1, le=5)

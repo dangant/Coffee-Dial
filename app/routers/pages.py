@@ -315,6 +315,8 @@ def submit_rating(
     request: Request,
     brew_id: int,
     overall_score: float = Form(...),
+    taste_rated: str = Form(""),
+    taste_score: str = Form(""),
     bitterness: str = Form(""),
     acidity: str = Form(""),
     sweetness: str = Form(""),
@@ -338,6 +340,8 @@ def submit_rating(
 
     data = RatingCreate(
         overall_score=overall_score,
+        # Taste is optional: only recorded when the "Rate taste" box is checked.
+        taste_score=float(taste_score) if (taste_rated and taste_score) else None,
         bitterness=float(bitterness) if bitterness else None,
         acidity=float(acidity) if acidity else None,
         sweetness=float(sweetness) if sweetness else None,

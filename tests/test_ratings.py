@@ -22,6 +22,23 @@ def test_create_rating(client):
     assert resp.json()["overall_score"] == 8.5
 
 
+def test_taste_score_optional(client):
+    # Omitting taste stores null; execution (overall) still required.
+    brew_id = _create_brew(client)
+    resp = client.post(f"/api/v1/brews/{brew_id}/rating/", json={"overall_score": 7.0})
+    assert resp.status_code == 201
+    assert resp.json()["taste_score"] is None
+
+
+def test_taste_score_roundtrip(client):
+    brew_id = _create_brew(client)
+    resp = client.post(f"/api/v1/brews/{brew_id}/rating/", json={
+        "overall_score": 7.0, "taste_score": 9.0,
+    })
+    assert resp.status_code == 201
+    assert resp.json()["taste_score"] == 9.0
+
+
 def test_duplicate_rating(client):
     brew_id = _create_brew(client)
     client.post(f"/api/v1/brews/{brew_id}/rating/", json={"overall_score": 7.0})

@@ -80,6 +80,7 @@ class BrewUpdate(BaseModel):
 class RatingInline(BaseModel):
     id: int
     overall_score: float
+    taste_score: float | None = None
     bitterness: float | None = None
     acidity: float | None = None
     sweetness: float | None = None
@@ -108,5 +109,6 @@ class BrewListRead(BaseModel):
     bean_name: str
     brew_method: str
     overall_score: float | None = None
+    taste_score: float | None = None
 
     model_config = {"from_attributes": True}

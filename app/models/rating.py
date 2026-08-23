@@ -11,7 +11,8 @@ class Rating(Base):
     brew_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("brews.id", ondelete="CASCADE"), unique=True, nullable=False
     )
-    overall_score: Mapped[float] = mapped_column(Float, nullable=False)
+    overall_score: Mapped[float] = mapped_column(Float, nullable=False)  # execution score
+    taste_score: Mapped[float | None] = mapped_column(Float, nullable=True)  # enjoyment, optional
     bitterness: Mapped[float | None] = mapped_column(Float, nullable=True)
     acidity: Mapped[float | None] = mapped_column(Float, nullable=True)
     sweetness: Mapped[float | None] = mapped_column(Float, nullable=True)

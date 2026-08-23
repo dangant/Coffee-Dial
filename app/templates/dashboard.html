@@ -13,7 +13,11 @@
     </div>
     <div class="stat-card">
         <div class="value">{{ summary.average_score or "—" }}</div>
-        <div class="label">Avg Score</div>
+        <div class="label">Avg Execution</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ summary.average_taste_score or "—" }}</div>
+        <div class="label">Avg Taste</div>
     </div>
     <div class="stat-card">
         <div class="value">{{ summary.top_roaster or "—" }}</div>
@@ -41,7 +45,7 @@
                 <th>Method</th>
                 <th>Grind</th>
                 <th>Grinder</th>
-                <th>Score</th>
+                <th>Score (E / T)</th>
             </tr>
         </thead>
         <tbody>
@@ -55,7 +59,10 @@
                 <td>{{ brew.grinder or '—' }}</td>
                 <td>
                     {% if brew.rating %}
-                        <span class="badge badge-score">{{ brew.rating.overall_score }}/10</span>
+                        <span class="badge badge-score" title="Execution">E {{ brew.rating.overall_score }}</span>
+                        {% if brew.rating.taste_score %}
+                        <span class="badge badge-score" title="Taste">T {{ brew.rating.taste_score }}</span>
+                        {% endif %}
                     {% else %}
                         <span style="color: var(--text-muted)">—</span>
                     {% endif %}

@@ -153,7 +153,14 @@
 <!-- Rating -->
 <div class="card">
     {% if brew.rating %}
-    <h2>Rating <span class="badge badge-score">{{ brew.rating.overall_score }}/10</span></h2>
+    <h2>Rating
+        <span class="badge badge-score" title="How well you executed the brew">Execution {{ brew.rating.overall_score }}/10</span>
+        {% if brew.rating.taste_score %}
+        <span class="badge badge-score" title="How much you enjoy the taste">Taste {{ brew.rating.taste_score }}/10</span>
+        {% else %}
+        <span class="badge" style="opacity:0.6;" title="Not rated yet">Taste —</span>
+        {% endif %}
+    </h2>
     <div class="detail-grid" style="margin-top: 1rem;">
         {% for attr in ['bitterness', 'acidity', 'sweetness', 'body', 'aroma', 'aftertaste'] %}
         {% set val = brew.rating[attr] %}

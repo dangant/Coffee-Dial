@@ -12,7 +12,11 @@
     </div>
     <div class="stat-card">
         <div class="value">{{ summary.average_score or "—" }}</div>
-        <div class="label">Avg Score</div>
+        <div class="label">Avg Execution</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ summary.average_taste_score or "—" }}</div>
+        <div class="label">Avg Taste</div>
     </div>
     <div class="stat-card">
         <div class="value">{{ summary.top_roaster or "—" }}</div>
@@ -21,7 +25,13 @@
     {% if summary.highest_rated_bean %}
     <div class="stat-card">
         <div class="value">{{ summary.highest_rated_bean.name }}</div>
-        <div class="label">Highest Rated ({{ summary.highest_rated_bean.avg_score }})</div>
+        <div class="label">Best Executed ({{ summary.highest_rated_bean.avg_score }})</div>
+    </div>
+    {% endif %}
+    {% if summary.most_enjoyed_bean %}
+    <div class="stat-card">
+        <div class="value">{{ summary.most_enjoyed_bean.name }}</div>
+        <div class="label">Most Enjoyed ({{ summary.most_enjoyed_bean.avg_score }})</div>
     </div>
     {% endif %}
 </div>
@@ -82,12 +92,15 @@
                     <option value="water_amount_ml">Water Amount</option>
                     <option value="water_temp_f">Water Temp (°F)</option>
                     <option value="brew_time_seconds">Brew Time</option>
+                    <option value="overall_score">Execution Score</option>
+                    <option value="taste_score">Taste Score</option>
                 </select>
             </div>
             <div class="form-group" style="flex: 1; margin: 0; min-width: 120px;">
                 <label>Y Axis</label>
                 <select id="corr-y" onchange="loadCorrelations()">
-                    <option value="overall_score">Overall Score</option>
+                    <option value="overall_score">Execution Score</option>
+                    <option value="taste_score">Taste Score</option>
                     <option value="bitterness">Bitterness</option>
                     <option value="acidity">Acidity</option>
                     <option value="sweetness">Sweetness</option>
@@ -184,16 +197,32 @@ async function loadTrends() {
         type: 'line',
         data: {
             labels: data.map(d => d.period),
-            datasets: [{
-                label: 'Avg Score',
-                data: data.map(d => d.avg_score),
-                borderColor: '#6b4423',
-                backgroundColor: 'rgba(107,68,35,0.1)',
-                fill: true,
-                tension: 0.3,
-            }]
+            datasets: [
+                {
+                    label: 'Execution',
+                    data: data.map(d => d.avg_score),
+                    borderColor: '#6b4423',
+                    backgroundColor: 'rgba(107,68,35,0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    spanGaps: true,
+                },
+                {
+                    label: 'Taste',
+                    data: data.map(d => d.avg_taste),
+                    borderColor: '#c77d3a',
+                    backgroundColor: 'rgba(199,125,58,0.1)',
+                    fill: false,
+                    tension: 0.3,
+                    spanGaps: true,
+                }
+            ]
         },
-        options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 10 } } }
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: { y: { min: 0, max: 10 } },
+            plugins: { legend: { display: true } }
+        }
     });
 }
 

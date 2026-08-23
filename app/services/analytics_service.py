@@ -9,6 +9,8 @@ def get_summary(db: Session) -> dict:
     total_brews = db.query(func.count(Brew.id)).scalar() or 0
     avg_score = db.query(func.avg(Rating.overall_score)).scalar()
     avg_score = round(avg_score, 2) if avg_score else None
+    avg_taste = db.query(func.avg(Rating.taste_score)).scalar()
+    avg_taste = round(avg_taste, 2) if avg_taste else None
 
     top_roaster = (
         db.query(Brew.roaster, func.count(Brew.id).label("cnt"))
@@ -30,6 +32,15 @@ def get_summary(db: Session) -> dict:
         .order_by(func.avg(Rating.overall_score).desc())
         .first()
     )
+    most_enjoyed = (
+        db.query(Brew.roaster, Brew.bean_name, func.avg(Rating.taste_score).label("avg"))
+        .join(Rating)
+        .filter(Rating.taste_score.isnot(None))
+        .group_by(Brew.roaster, Brew.bean_name)
+        .having(func.count(Rating.taste_score) >= 1)
+        .order_by(func.avg(Rating.taste_score).desc())
+        .first()
+    )
     avg_flavor_accuracy = (
         db.query(func.avg(Rating.flavor_notes_accuracy))
         .filter(Rating.flavor_notes_accuracy.isnot(None))
@@ -39,7 +50,8 @@ def get_summary(db: Session) -> dict:
 
     return {
         "total_brews": total_brews,
-        "average_score": avg_score,
+        "average_score": avg_score,          # execution
+        "average_taste_score": avg_taste,    # enjoyment (None until taste is rated)
         "top_roaster": top_roaster[0] if top_roaster else None,
         "top_bean": top_bean[0] if top_bean else None,
         "highest_rated_bean": {
@@ -47,6 +59,12 @@ def get_summary(db: Session) -> dict:
             "avg_score": round(highest_rated[2], 2),
         }
         if highest_rated
+        else None,
+        "most_enjoyed_bean": {
+            "name": f"{most_enjoyed[0]} — {most_enjoyed[1]}",
+            "avg_score": round(most_enjoyed[2], 2),
+        }
+        if most_enjoyed
         else None,
         "avg_flavor_accuracy": avg_flavor_accuracy,
     }
@@ -79,7 +97,11 @@ def get_trends(
             date_expr = func.to_char(Brew.brew_date, "YYYY-MM-DD")
 
     query = (
-        db.query(date_expr.label("period"), func.avg(Rating.overall_score).label("avg_score"))
+        db.query(
+            date_expr.label("period"),
+            func.avg(Rating.overall_score).label("avg_score"),
+            func.avg(Rating.taste_score).label("avg_taste"),
+        )
         .join(Rating)
     )
     if bean_name:
@@ -90,7 +112,14 @@ def get_trends(
         query = query.filter(Brew.brew_method == brew_method)
 
     rows = query.group_by("period").order_by("period").all()
-    return [{"period": r.period, "avg_score": round(r.avg_score, 2)} for r in rows]
+    return [
+        {
+            "period": r.period,
+            "avg_score": round(r.avg_score, 2) if r.avg_score is not None else None,
+            "avg_taste": round(r.avg_taste, 2) if r.avg_taste is not None else None,
+        }
+        for r in rows
+    ]
 
 
 def get_correlations(
@@ -107,7 +136,7 @@ def get_correlations(
         "grind_setting",
     }
     rating_fields = {
-        "overall_score", "bitterness", "acidity", "sweetness",
+        "overall_score", "taste_score", "bitterness", "acidity", "sweetness",
         "body", "aroma", "aftertaste",
     }
     computed_fields = {"days_since_roast"}

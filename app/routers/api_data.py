@@ -213,6 +213,7 @@ def import_all(file: UploadFile = File(...), db: Session = Depends(get_db)):
             id=r["id"],
             brew_id=r["brew_id"],
             overall_score=r["overall_score"],
+            taste_score=r.get("taste_score"),
             bitterness=r.get("bitterness"),
             acidity=r.get("acidity"),
             sweetness=r.get("sweetness"),
