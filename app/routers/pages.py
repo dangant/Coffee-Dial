@@ -371,6 +371,11 @@ def template_list(request: Request, db: Session = Depends(get_db)):
     })
 
 
+@router.get("/templates/import", response_class=HTMLResponse)
+def onyx_import_page(request: Request):
+    return templates.TemplateResponse("onyx_import.html", {"request": request})
+
+
 @router.get("/templates/new", response_class=HTMLResponse)
 def new_template_form(request: Request, db: Session = Depends(get_db)):
     lookups = _get_lookups(db)

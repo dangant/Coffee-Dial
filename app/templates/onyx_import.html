@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}Import from Onyx - Coffee Data{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Import from Onyx</h1>
+    <a href="/templates" class="btn btn-outline btn-sm">← Back to Templates</a>
+</div>
+<p style="color:var(--text-muted, #888); margin-top:-0.5rem;">
+    Paste an Onyx Coffee Lab product link. We'll pull the tasting notes and recipes, create an
+    espresso and a pour-over template, and (optionally) add the bag to your shelf.
+</p>
+
+<!-- Step 1: URL -->
+<div class="card" style="margin-bottom:1.5rem;">
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
+        <div class="form-group" style="flex:1; min-width:280px; margin:0;">
+            <label>Onyx product URL</label>
+            <input type="text" id="onyx-url"
+                   placeholder="https://onyxcoffeelab.com/products/…"
+                   onkeydown="if(event.key==='Enter') preview()">
+        </div>
+        <button class="btn btn-primary" style="margin-bottom:0;" id="preview-btn" onclick="preview()">Preview</button>
+    </div>
+    <p id="url-msg" style="margin:0.5rem 0 0; font-size:0.85rem; color:#f44336;"></p>
+</div>
+
+<!-- Step 2: editable preview -->
+<div id="preview-card" class="card" hidden>
+    <h2 style="margin-top:0;">Review &amp; edit</h2>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:0.75rem;">
+        <div class="form-group" style="margin:0;">
+            <label>Coffee name</label>
+            <input type="text" id="f-name">
+        </div>
+        <div class="form-group" style="margin:0;">
+            <label>Roaster</label>
+            <input type="text" id="f-roaster">
+        </div>
+        <div class="form-group" style="margin:0;">
+            <label>Origin</label>
+            <input type="text" id="f-origin">
+        </div>
+        <div class="form-group" style="margin:0;">
+            <label>Process</label>
+            <input type="text" id="f-process">
+        </div>
+    </div>
+    <div class="form-group" style="margin:0.75rem 0 0;">
+        <label>Flavor notes (comma-separated)</label>
+        <input type="text" id="f-notes" placeholder="Pomegranate, Lychee, …">
+    </div>
+
+    <h3 style="margin:1.25rem 0 0.5rem;">Espresso recipe</h3>
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+        <div class="form-group" style="margin:0; width:120px;"><label>Dose (g)</label><input type="number" step="0.1" id="e-dose"></div>
+        <div class="form-group" style="margin:0; width:120px;"><label>Yield (g)</label><input type="number" step="0.1" id="e-yield"></div>
+        <div class="form-group" style="margin:0; width:120px;"><label>Time (s)</label><input type="number" id="e-time"></div>
+    </div>
+
+    <h3 style="margin:1.25rem 0 0.5rem;">Pour-over recipe</h3>
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+        <div class="form-group" style="margin:0; width:120px;"><label>Coffee (g)</label><input type="number" step="0.1" id="p-coffee"></div>
+        <div class="form-group" style="margin:0; width:120px;"><label>Water (g)</label><input type="number" step="0.1" id="p-water"></div>
+        <div class="form-group" style="margin:0; width:120px;"><label>Temp (°F)</label><input type="number" step="0.1" id="p-temp"></div>
+        <div class="form-group" style="margin:0; width:120px;"><label>Grind (µm)</label><input type="number" id="p-grind"></div>
+    </div>
+    <p id="p-steps" style="margin:0.75rem 0 0; font-size:0.85rem; color:#888; white-space:pre-line;"></p>
+
+    <h3 style="margin:1.25rem 0 0.5rem;">Add to shelf</h3>
+    <div id="size-buttons" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;"></div>
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
+        <div class="form-group" style="margin:0; width:140px;"><label>Grams</label><input type="number" step="0.1" id="s-grams" placeholder="optional"></div>
+        <div class="form-group" style="margin:0; width:140px;"><label>Price ($)</label><input type="number" step="0.01" id="s-price" placeholder="optional"></div>
+    </div>
+    <p style="font-size:0.8rem; color:#888; margin:0.5rem 0 0;">Leave grams blank to create the templates without stocking the shelf.</p>
+
+    <div style="margin-top:1.5rem; display:flex; gap:0.75rem; align-items:center;">
+        <button class="btn btn-primary" id="create-btn" onclick="commit()">Create 2 templates + add to shelf</button>
+        <span id="commit-msg" style="font-size:0.9rem;"></span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let parsed = null;
+
+function val(id) { const el = document.getElementById(id); const v = el.value.trim(); return v === '' ? null : v; }
+function num(id) { const v = val(id); return v === null ? null : parseFloat(v); }
+
+async function preview() {
+    const url = document.getElementById('onyx-url').value.trim();
+    const msg = document.getElementById('url-msg');
+    const btn = document.getElementById('preview-btn');
+    msg.textContent = '';
+    if (!url) { msg.textContent = 'Paste an Onyx product URL first.'; return; }
+    btn.disabled = true; btn.textContent = 'Loading…';
+    try {
+        const resp = await fetch('/api/v1/import/onyx/preview', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) { msg.textContent = data.detail || 'Could not import that link.'; return; }
+        parsed = data;
+        fillPreview(data);
+        document.getElementById('preview-card').hidden = false;
+        document.getElementById('preview-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {
+        msg.textContent = 'Network error: ' + e.message;
+    } finally {
+        btn.disabled = false; btn.textContent = 'Preview';
+    }
+}
+
+function set(id, v) { document.getElementById(id).value = (v === null || v === undefined) ? '' : v; }
+
+function fillPreview(d) {
+    set('f-name', d.product_name);
+    set('f-roaster', d.roaster);
+    set('f-origin', d.bean_origin);
+    set('f-process', d.bean_process);
+    set('f-notes', (d.flavor_notes || []).join(', '));
+    const e = d.espresso || {};
+    set('e-dose', e.dose_g); set('e-yield', e.yield_g); set('e-time', e.time_s);
+    const p = d.pour_over || {};
+    set('p-coffee', p.coffee_g); set('p-water', p.water_g); set('p-temp', p.temp_f); set('p-grind', p.grind_um);
+    // Pour schedule (read-only summary)
+    const steps = (p.steps || []).map(s => {
+        const t = s.time_s ?? null;
+        const mmss = t === null ? '?' : `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+        return `${mmss}  ${s.action || ''}${s.weight_g ? ' to ' + s.weight_g + 'g' : ''}`;
+    }).join('\n');
+    document.getElementById('p-steps').textContent = steps ? ('Pour schedule:\n' + steps) : '';
+    // Size buttons
+    const wrap = document.getElementById('size-buttons');
+    wrap.innerHTML = '';
+    (d.sizes || []).forEach(sz => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'btn btn-outline btn-sm';
+        const g = sz.grams ? `${sz.grams}g` : sz.label;
+        b.textContent = `${sz.label} — ${g}${sz.price ? ' ($' + sz.price.toFixed(2) + ')' : ''}`;
+        b.onclick = () => { set('s-grams', sz.grams); set('s-price', sz.price); highlight(b); };
+        wrap.appendChild(b);
+    });
+}
+
+function highlight(active) {
+    document.querySelectorAll('#size-buttons .btn').forEach(b => b.classList.remove('btn-primary'));
+    active.classList.remove('btn-outline'); active.classList.add('btn-primary');
+}
+
+async function commit() {
+    const btn = document.getElementById('create-btn');
+    const msg = document.getElementById('commit-msg');
+    msg.style.color = '#888'; msg.textContent = 'Creating…';
+    btn.disabled = true;
+    const notes = (val('f-notes') || '').split(',').map(s => s.trim()).filter(Boolean);
+    const payload = {
+        product_name: val('f-name') || 'Onyx Coffee',
+        bean_name: val('f-name'),
+        roaster: val('f-roaster'),
+        bean_origin: val('f-origin'),
+        bean_process: val('f-process'),
+        flavor_notes: notes,
+        espresso: { dose_g: num('e-dose'), yield_g: num('e-yield'), time_s: num('e-time') },
+        pour_over: {
+            coffee_g: num('p-coffee'), water_g: num('p-water'), temp_f: num('p-temp'),
+            grind_um: num('p-grind'),
+            device: (parsed && parsed.pour_over) ? parsed.pour_over.device : null,
+            steps: (parsed && parsed.pour_over) ? (parsed.pour_over.steps || []) : [],
+        },
+        grams: num('s-grams'),
+        price: num('s-price'),
+    };
+    try {
+        const resp = await fetch('/api/v1/import/onyx/commit', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (!resp.ok) { msg.style.color = '#f44336'; msg.textContent = data.detail || 'Failed to create.'; btn.disabled = false; return; }
+        msg.style.color = '#4caf50';
+        const names = (data.templates || []).map(t => t.name).join(' + ');
+        msg.textContent = `Created: ${names}. Redirecting…`;
+        setTimeout(() => { window.location.href = '/templates'; }, 900);
+    } catch (e) {
+        msg.style.color = '#f44336'; msg.textContent = 'Network error: ' + e.message; btn.disabled = false;
+    }
+}
+</script>
+{% endblock %}

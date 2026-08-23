@@ -12,6 +12,7 @@ from app.routers import (
     api_brews,
     api_data,
     api_grind_lab,
+    api_import,
     api_lookups,
     api_ratings,
     api_recommendations,
@@ -150,6 +151,7 @@ app.include_router(api_recommendations.router)
 app.include_router(api_lookups.router)
 app.include_router(api_grind_lab.router)
 app.include_router(api_shelf.router)
+app.include_router(api_import.router)
 app.include_router(api_data.router)
 
 # Page routers
