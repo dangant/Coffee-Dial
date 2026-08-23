@@ -30,6 +30,8 @@ def upsert_inventory(
         inv = BeanInventory(
             bean_name=bean_name, roaster=roaster,
             initial_amount_grams=initial_grams, price=price,
+            # Anchor tracking: don't count brews made before this bean was added.
+            used_offset_grams=_grams_used(db, bean_name, roaster),
         )
         db.add(inv)
     db.commit()
@@ -58,6 +60,8 @@ def restock_inventory(
         inv = BeanInventory(
             bean_name=bean_name, roaster=roaster,
             initial_amount_grams=add_grams, price=price,
+            # Anchor tracking: don't count brews made before this bean was added.
+            used_offset_grams=_grams_used(db, bean_name, roaster),
         )
         db.add(inv)
     db.commit()
@@ -101,7 +105,8 @@ def list_shelf(db: Session) -> list[dict]:
     result = []
 
     for inv in inventory:
-        used = _grams_used(db, inv.bean_name, inv.roaster)
+        # Only count brews since this bean was added to the shelf (offset out prior history).
+        used = max(0.0, _grams_used(db, inv.bean_name, inv.roaster) - (inv.used_offset_grams or 0.0))
         remaining = max(0.0, inv.initial_amount_grams - used)
         result.append(
             {

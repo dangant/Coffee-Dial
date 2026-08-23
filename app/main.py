@@ -87,6 +87,11 @@ with engine.connect() as conn:
         if "price" not in inv_cols:
             conn.execute(text("ALTER TABLE bean_inventory ADD COLUMN price FLOAT"))
             conn.commit()
+        if "used_offset_grams" not in inv_cols:
+            conn.execute(
+                text("ALTER TABLE bean_inventory ADD COLUMN used_offset_grams FLOAT DEFAULT 0")
+            )
+            conn.commit()
 
     # Reconcile brew_devices to the current preferred set on already-seeded DBs.
     # brew.brew_device is stored as a plain string, so removing lookup rows does
