@@ -15,6 +15,7 @@ class InventoryUpsert(BaseModel):
     roaster: Optional[str] = None
     initial_amount_grams: float
     price: Optional[float] = None
+    mode: str = "set"  # "set" = absolute correction, "add" = restock (accumulate)
 
 
 @router.get("/lp")
@@ -43,10 +44,16 @@ def set_inventory(body: InventoryUpsert, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Amount must be non-negative")
     if body.price is not None and body.price < 0:
         raise HTTPException(status_code=400, detail="Price must be non-negative")
-    inv = inventory_service.upsert_inventory(
-        db, body.bean_name, body.roaster or None, body.initial_amount_grams,
-        price=body.price,
-    )
+    if body.mode == "add":
+        inv = inventory_service.restock_inventory(
+            db, body.bean_name, body.roaster or None, body.initial_amount_grams,
+            price=body.price,
+        )
+    else:
+        inv = inventory_service.upsert_inventory(
+            db, body.bean_name, body.roaster or None, body.initial_amount_grams,
+            price=body.price,
+        )
     return {
         "id": inv.id,
         "bean_name": inv.bean_name,

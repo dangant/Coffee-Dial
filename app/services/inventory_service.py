@@ -37,6 +37,34 @@ def upsert_inventory(
     return inv
 
 
+def restock_inventory(
+    db: Session,
+    bean_name: str,
+    roaster: str | None,
+    add_grams: float,
+    price: float | None = None,
+) -> BeanInventory:
+    """Add another bag: accumulate grams (and price = total spent) onto the running total."""
+    inv = (
+        db.query(BeanInventory)
+        .filter(BeanInventory.bean_name == bean_name, BeanInventory.roaster == roaster)
+        .first()
+    )
+    if inv:
+        inv.initial_amount_grams += add_grams
+        if price is not None:
+            inv.price = (inv.price or 0) + price
+    else:
+        inv = BeanInventory(
+            bean_name=bean_name, roaster=roaster,
+            initial_amount_grams=add_grams, price=price,
+        )
+        db.add(inv)
+    db.commit()
+    db.refresh(inv)
+    return inv
+
+
 def delete_inventory(db: Session, inv_id: int) -> bool:
     inv = db.query(BeanInventory).filter(BeanInventory.id == inv_id).first()
     if not inv:

@@ -10,7 +10,8 @@
 
 <!-- Add / update a bean -->
 <div class="card" style="margin-bottom: 1.5rem;">
-    <h2 style="margin-top:0;">Add or Update a Bean</h2>
+    <h2 style="margin-top:0;">Add a Bag</h2>
+    <p style="color:#888; font-size:0.85rem; margin:-0.25rem 0 0.75rem;">New bean, or bought more of one you already track — this adds to the running total.</p>
     <div class="form-group" id="template-picker-group" style="max-width:360px; margin-bottom:0.75rem;" hidden>
         <label>From a Template</label>
         <select id="template-picker" onchange="prefillFromTemplate(this.value)">
@@ -29,14 +30,14 @@
             <datalist id="roaster-suggestions"></datalist>
         </div>
         <div class="form-group" style="flex:1; min-width:110px; margin:0;">
-            <label>Grams on Shelf</label>
+            <label>Grams (this bag)</label>
             <input type="number" id="add-grams" min="0" step="0.1" placeholder="e.g. 250">
         </div>
         <div class="form-group" style="flex:1; min-width:100px; margin:0;">
-            <label>Price ($/bag)</label>
+            <label>Price (this bag)</label>
             <input type="number" id="add-price" min="0" step="0.01" placeholder="e.g. 22.50">
         </div>
-        <button class="btn" style="margin-bottom:0;" onclick="addEntry()">Save</button>
+        <button class="btn" style="margin-bottom:0;" onclick="addEntry()">Add Bag</button>
     </div>
     <p id="add-msg" style="margin:0.5rem 0 0; font-size:0.85rem; color:#888;"></p>
 </div>
@@ -49,7 +50,7 @@
             <tr>
                 <th>Bean</th>
                 <th>Roaster</th>
-                <th>Stocked (g)</th>
+                <th>Total Stocked (g)</th>
                 <th>Price</th>
                 <th>Used (g)</th>
                 <th>Remaining (g)</th>
@@ -224,13 +225,13 @@ async function addEntry() {
     await fetch('/api/v1/shelf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bean_name: bean, roaster, initial_amount_grams: grams, price }),
+        body: JSON.stringify({ bean_name: bean, roaster, initial_amount_grams: grams, price, mode: 'add' }),
     });
     document.getElementById('add-bean').value = '';
     document.getElementById('add-roaster').value = '';
     document.getElementById('add-grams').value = '';
     document.getElementById('add-price').value = '';
-    msg.textContent = `Saved ${grams}g of "${bean}".`;
+    msg.textContent = `Added a ${grams}g bag of "${bean}".`;
     msg.style.color = '#4caf50';
     await loadShelf();
 }
