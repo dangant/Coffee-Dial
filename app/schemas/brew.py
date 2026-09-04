@@ -35,6 +35,8 @@ class BrewBase(BaseModel):
     water_filter_type: str | None = None
     altitude_ft: int | None = None
     notes: str | None = None
+    brewed_for_friend: bool = False
+    is_first_brew: bool = False
     template_id: int | None = None
 
 
@@ -74,6 +76,8 @@ class BrewUpdate(BaseModel):
     water_filter_type: str | None = None
     altitude_ft: int | None = None
     notes: str | None = None
+    brewed_for_friend: bool | None = None
+    is_first_brew: bool | None = None
     template_id: int | None = None
 
 

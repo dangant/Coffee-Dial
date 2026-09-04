@@ -19,6 +19,8 @@
             <td>{{ brew.brew_method }}</td>
             <td>{{ brew.bean_amount_grams }}g / {{ brew.water_amount_ml }}ml</td>
             <td>
+                {% if brew.brewed_for_friend %}<span class="badge" title="Brewed for a friend — rating not counted">👥</span>{% endif %}
+                {% if brew.is_first_brew %}<span class="badge" title="First brew — still calibrating, rating not counted">🎯</span>{% endif %}
                 {% if brew.rating %}
                     <span class="badge badge-score" title="Execution">E {{ brew.rating.overall_score }}</span>
                     {% if brew.rating.taste_score %}

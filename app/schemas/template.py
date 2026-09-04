@@ -12,6 +12,7 @@ class TemplateBase(BaseModel):
     roast_date: date | None = None
     roast_level: str | None = None
     flavor_notes_expected: str | None = None
+    product_url: str | None = None
     bean_amount_grams: float | None = None
     grind_setting: str | None = None
     grinder: str | None = None
@@ -51,6 +52,7 @@ class TemplateUpdate(BaseModel):
     roast_date: date | None = None
     roast_level: str | None = None
     flavor_notes_expected: str | None = None
+    product_url: str | None = None
     bean_amount_grams: float | None = None
     grind_setting: str | None = None
     grinder: str | None = None

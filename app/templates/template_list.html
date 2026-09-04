@@ -28,6 +28,12 @@
             {% if tpl.grind_suggestion_um %} | {{ tpl.grind_suggestion_um }}µm{% endif %}
         </div>
         {% endif %}
+        {% if tpl.product_url %}
+        <div class="meta">
+            <a href="{{ tpl.product_url }}" target="_blank" rel="noopener noreferrer">
+                {{ '☕ Onyx page' if 'onyxcoffeelab.com' in tpl.product_url else '🔗 Product page' }} ↗</a>
+        </div>
+        {% endif %}
         <div class="actions">
             <a href="/brews/new" class="btn btn-primary btn-sm">Use</a>
             <a href="/templates/{{ tpl.id }}/edit" class="btn btn-outline btn-sm">Edit</a>

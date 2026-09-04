@@ -10,8 +10,8 @@ router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
 
 
 @router.get("/summary")
-def get_summary(db: Session = Depends(get_db)):
-    return analytics_service.get_summary(db)
+def get_summary(include_excluded: bool = False, db: Session = Depends(get_db)):
+    return analytics_service.get_summary(db, include_excluded=include_excluded)
 
 
 @router.get("/trends")
@@ -20,9 +20,13 @@ def get_trends(
     bean_name: Optional[str] = Query(None),
     grinder: Optional[str] = Query(None),
     brew_method: Optional[str] = Query(None),
+    include_excluded: bool = False,
     db: Session = Depends(get_db),
 ):
-    return analytics_service.get_trends(db, group_by, bean_name=bean_name, grinder=grinder, brew_method=brew_method)
+    return analytics_service.get_trends(
+        db, group_by, bean_name=bean_name, grinder=grinder, brew_method=brew_method,
+        include_excluded=include_excluded,
+    )
 
 
 @router.get("/correlations")
@@ -32,9 +36,13 @@ def get_correlations(
     bean_name: Optional[str] = Query(None),
     grinder: Optional[str] = Query(None),
     brew_method: Optional[str] = Query(None),
+    include_excluded: bool = False,
     db: Session = Depends(get_db),
 ):
-    return analytics_service.get_correlations(db, x, y, bean_name=bean_name, grinder=grinder, brew_method=brew_method)
+    return analytics_service.get_correlations(
+        db, x, y, bean_name=bean_name, grinder=grinder, brew_method=brew_method,
+        include_excluded=include_excluded,
+    )
 
 
 @router.get("/filter-options")

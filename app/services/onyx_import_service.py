@@ -256,6 +256,13 @@ def _pour_slots(steps: list[dict]) -> dict:
     return out
 
 
+def _product_url(url: str | None) -> str | None:
+    """Re-validate the product URL before it is stored and later rendered as a link."""
+    if not url or not url.strip():
+        return None
+    return _normalize(url)
+
+
 def build_templates(data: dict) -> tuple[TemplateCreate, TemplateCreate]:
     """Build (espresso, pour_over) TemplateCreate payloads from an edited import dict."""
     name = (data.get("product_name") or "Onyx Coffee").strip()
@@ -269,6 +276,7 @@ def build_templates(data: dict) -> tuple[TemplateCreate, TemplateCreate]:
         bean_origin=data.get("bean_origin") or None,
         bean_process=data.get("bean_process") or None,
         flavor_notes_expected=notes_str,
+        product_url=_product_url(data.get("url")),
     )
 
     esp = data.get("espresso") or {}

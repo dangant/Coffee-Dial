@@ -18,6 +18,8 @@ class BrewTemplate(Base):
     roast_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     roast_level: Mapped[str | None] = mapped_column(String(50), nullable=True)
     flavor_notes_expected: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Roaster's product page for this coffee (e.g. the Onyx product URL)
+    product_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     bean_amount_grams: Mapped[float | None] = mapped_column(Float, nullable=True)
     grind_setting: Mapped[str | None] = mapped_column(String(20), nullable=True)
     grinder: Mapped[str | None] = mapped_column(String(100), nullable=True)

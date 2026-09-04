@@ -1,15 +1,40 @@
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models.brew import Brew
 from app.models.rating import Rating
 
 
-def get_summary(db: Session) -> dict:
+def _counted(query, include_excluded: bool = False):
+    """Drop brews whose rating shouldn't shape the stats.
+
+    A brew made for a friend was rated to someone else's taste, and a first
+    brew is scored before the recipe (or the scoring itself) has settled.
+    `IS NOT TRUE` rather than `== False` so rows predating the columns count.
+    """
+    if include_excluded:
+        return query
+    return query.filter(
+        ~Brew.brewed_for_friend.is_(True),
+        ~Brew.is_first_brew.is_(True),
+    )
+
+
+def get_summary(db: Session, include_excluded: bool = False) -> dict:
     total_brews = db.query(func.count(Brew.id)).scalar() or 0
-    avg_score = db.query(func.avg(Rating.overall_score)).scalar()
+    excluded_brews = (
+        db.query(func.count(Brew.id))
+        .filter(or_(Brew.brewed_for_friend.is_(True), Brew.is_first_brew.is_(True)))
+        .scalar()
+        or 0
+    )
+    rated = _counted(
+        db.query(Rating).select_from(Rating).join(Brew, Rating.brew_id == Brew.id),
+        include_excluded,
+    )
+    avg_score = rated.with_entities(func.avg(Rating.overall_score)).scalar()
     avg_score = round(avg_score, 2) if avg_score else None
-    avg_taste = db.query(func.avg(Rating.taste_score)).scalar()
+    avg_taste = rated.with_entities(func.avg(Rating.taste_score)).scalar()
     avg_taste = round(avg_taste, 2) if avg_taste else None
 
     top_roaster = (
@@ -25,16 +50,22 @@ def get_summary(db: Session) -> dict:
         .first()
     )
     highest_rated = (
-        db.query(Brew.roaster, Brew.bean_name, func.avg(Rating.overall_score).label("avg"))
-        .join(Rating)
+        _counted(
+            db.query(Brew.roaster, Brew.bean_name, func.avg(Rating.overall_score).label("avg"))
+            .join(Rating, Rating.brew_id == Brew.id),
+            include_excluded,
+        )
         .group_by(Brew.roaster, Brew.bean_name)
         .having(func.count(Rating.id) >= 1)
         .order_by(func.avg(Rating.overall_score).desc())
         .first()
     )
     most_enjoyed = (
-        db.query(Brew.roaster, Brew.bean_name, func.avg(Rating.taste_score).label("avg"))
-        .join(Rating)
+        _counted(
+            db.query(Brew.roaster, Brew.bean_name, func.avg(Rating.taste_score).label("avg"))
+            .join(Rating, Rating.brew_id == Brew.id),
+            include_excluded,
+        )
         .filter(Rating.taste_score.isnot(None))
         .group_by(Brew.roaster, Brew.bean_name)
         .having(func.count(Rating.taste_score) >= 1)
@@ -42,7 +73,12 @@ def get_summary(db: Session) -> dict:
         .first()
     )
     avg_flavor_accuracy = (
-        db.query(func.avg(Rating.flavor_notes_accuracy))
+        _counted(
+            db.query(func.avg(Rating.flavor_notes_accuracy))
+            .select_from(Rating)
+            .join(Brew, Rating.brew_id == Brew.id),
+            include_excluded,
+        )
         .filter(Rating.flavor_notes_accuracy.isnot(None))
         .scalar()
     )
@@ -50,6 +86,7 @@ def get_summary(db: Session) -> dict:
 
     return {
         "total_brews": total_brews,
+        "excluded_brews": excluded_brews,
         "average_score": avg_score,          # execution
         "average_taste_score": avg_taste,    # enjoyment (None until taste is rated)
         "top_roaster": top_roaster[0] if top_roaster else None,
@@ -80,6 +117,7 @@ def get_trends(
     bean_name: str | None = None,
     grinder: str | None = None,
     brew_method: str | None = None,
+    include_excluded: bool = False,
 ) -> list[dict]:
     if _is_sqlite(db):
         if group_by == "month":
@@ -102,8 +140,10 @@ def get_trends(
             func.avg(Rating.overall_score).label("avg_score"),
             func.avg(Rating.taste_score).label("avg_taste"),
         )
-        .join(Rating)
+        .select_from(Brew)
+        .join(Rating, Rating.brew_id == Brew.id)
     )
+    query = _counted(query, include_excluded)
     if bean_name:
         query = query.filter(Brew.bean_name == bean_name)
     if grinder:
@@ -129,6 +169,7 @@ def get_correlations(
     bean_name: str | None = None,
     grinder: str | None = None,
     brew_method: str | None = None,
+    include_excluded: bool = False,
 ) -> list[dict]:
     brew_fields = {
         "bean_amount_grams", "water_amount_ml",
@@ -162,9 +203,11 @@ def get_correlations(
 
     query = (
         db.query(x_col.label("x"), y_col.label("y"))
-        .join(Rating)
+        .select_from(Brew)
+        .join(Rating, Rating.brew_id == Brew.id)
         .filter(x_col.isnot(None), y_col.isnot(None))
     )
+    query = _counted(query, include_excluded)
     if x_field == "days_since_roast" or y_field == "days_since_roast":
         query = query.filter(Brew.roast_date.isnot(None), Brew.brew_date.isnot(None))
     if bean_name:

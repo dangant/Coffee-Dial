@@ -17,6 +17,7 @@ class PreviewRequest(BaseModel):
 
 class CommitRequest(BaseModel):
     product_name: str
+    url: Optional[str] = None
     bean_name: Optional[str] = None
     roaster: Optional[str] = None
     bean_origin: Optional[str] = None

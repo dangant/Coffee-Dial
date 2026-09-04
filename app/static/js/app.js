@@ -25,6 +25,18 @@ function resetBrewForm() {
     enforceCheckboxLimit(4);
     const tplIdEl = document.querySelector('[name="template_id"]');
     if (tplIdEl) tplIdEl.value = '';
+    showTemplateProductLink(null);
+    captureDoseBaseline();
+}
+
+// Pre-tick "first brew" for a template nothing has been brewed from yet.
+// A manual click marks the box as touched and we stop guessing for the rest
+// of the form session.
+function applyFirstBrewHint(selectEl) {
+    const cb = document.getElementById('first-brew-checkbox');
+    if (!cb || cb.dataset.touched) return;
+    const opt = selectEl && selectEl.selectedOptions[0];
+    cb.checked = !!(selectEl && selectEl.value && opt && opt.dataset.firstBrew === '1');
 }
 
 // Template loading
@@ -32,6 +44,7 @@ async function loadTemplate(selectEl) {
     const id = selectEl.value;
     // Always reset the form first
     resetBrewForm();
+    applyFirstBrewHint(selectEl);
     if (!id) return;
     try {
         const resp = await fetch(`/api/v1/templates/${id}`);
@@ -87,6 +100,9 @@ async function loadTemplate(selectEl) {
         // Set template_id hidden field
         const tplIdEl = document.querySelector('[name="template_id"]');
         if (tplIdEl) tplIdEl.value = id;
+        showTemplateProductLink(data.product_url);
+        // The loaded recipe is what a dose change scales from
+        captureDoseBaseline();
     } catch (e) {
         console.error('Failed to load template:', e);
     }
@@ -308,3 +324,123 @@ async function exportCSV() {
         console.error('Export failed:', e);
     }
 }
+
+// --- Dose scaling -----------------------------------------------------------
+// Changing the coffee dose rescales every water number by the same multiplier,
+// so the brew ratio (and the shape of the pour schedule) is preserved.
+// Pour times are left alone.
+const DOSE_WATER_FIELDS = [
+    'water_amount_ml', 'bloom_water_ml',
+    'first_pour_grams', 'second_pour_grams', 'final_pour_grams',
+];
+let doseBaseline = null;  // { dose: number, water: { fieldName: number } }
+
+function doseField() {
+    return document.querySelector('[name="bean_amount_grams"]');
+}
+
+// Snapshot the current dose + water values as the recipe we scale from.
+function captureDoseBaseline() {
+    const input = doseField();
+    if (!input) return;
+    const dose = parseFloat(input.value);
+    const water = {};
+    DOSE_WATER_FIELDS.forEach(name => {
+        const el = document.querySelector(`[name="${name}"]`);
+        if (el && el.value !== '') water[name] = parseFloat(el.value);
+    });
+    doseBaseline = dose > 0 ? { dose, water } : null;
+    hideDoseNotice();
+}
+
+function scaleWaterToDose() {
+    const input = doseField();
+    if (!input || !doseBaseline) return;
+    const dose = parseFloat(input.value);
+    if (!(dose > 0)) return;
+    if (Math.abs(dose - doseBaseline.dose) < 1e-9) {
+        hideDoseNotice();
+        return;
+    }
+    // Always scale from the baseline, never from already-scaled values, so
+    // rounding never compounds as you nudge the dose around.
+    const mult = dose / doseBaseline.dose;
+    Object.entries(doseBaseline.water).forEach(([name, base]) => {
+        const el = document.querySelector(`[name="${name}"]`);
+        if (el) el.value = Math.round(base * mult);
+    });
+    showDoseNotice(dose, mult);
+}
+
+function undoDoseScaling() {
+    const input = doseField();
+    if (!input || !doseBaseline) return;
+    input.value = doseBaseline.dose;
+    Object.entries(doseBaseline.water).forEach(([name, base]) => {
+        const el = document.querySelector(`[name="${name}"]`);
+        if (el) el.value = base;
+    });
+    hideDoseNotice();
+}
+
+function showDoseNotice(dose, mult) {
+    const notice = document.getElementById('dose-scale-notice');
+    if (!notice) return;
+    const text = notice.querySelector('.dose-scale-text');
+    const water = doseBaseline.water.water_amount_ml;
+    const ratio = water ? ` — ratio 1:${(water / doseBaseline.dose).toFixed(1)} kept` : '';
+    text.textContent = `Water scaled ×${mult.toFixed(3)} for ${dose} g coffee${ratio}.`;
+    notice.style.display = 'flex';
+}
+
+function hideDoseNotice() {
+    const notice = document.getElementById('dose-scale-notice');
+    if (notice) notice.style.display = 'none';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const input = doseField();
+    if (!input) return;
+    captureDoseBaseline();
+    input.addEventListener('change', scaleWaterToDose);
+    // A hand-edited water value becomes the new recipe to scale from.
+    DOSE_WATER_FIELDS.forEach(name => {
+        const el = document.querySelector(`[name="${name}"]`);
+        if (el) el.addEventListener('change', captureDoseBaseline);
+    });
+});
+
+// --- Roaster product link ---------------------------------------------------
+// Templates can carry the roaster's product page (auto-filled by the Onyx
+// importer, or typed on the template form) so the source recipe is one click away.
+function productLinkLabel(url) {
+    return url.includes('onyxcoffeelab.com') ? '☕ View on Onyx ↗' : '🔗 View product page ↗';
+}
+
+// Brew form: surface the selected template's product page under the picker.
+function showTemplateProductLink(url) {
+    const link = document.getElementById('template-product-link');
+    if (!link) return;
+    if (!url) {
+        link.style.display = 'none';
+        link.removeAttribute('href');
+        return;
+    }
+    link.href = url;
+    link.textContent = productLinkLabel(url);
+    link.style.display = 'inline-block';
+}
+
+// Template form: keep the "Open page" link in step with what is typed.
+function updateProductLinkPreview() {
+    const input = document.getElementById('product-url-input');
+    const link = document.getElementById('product-url-open');
+    if (!input || !link) return;
+    const url = input.value.trim();
+    const ok = /^https?:\/\//i.test(url);
+    link.href = ok ? url : '#';
+    link.textContent = ok ? productLinkLabel(url) : '';
+    link.style.display = ok ? 'inline-block' : 'none';
+}
+
+document.addEventListener('DOMContentLoaded', updateProductLinkPreview);

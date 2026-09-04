@@ -55,6 +55,23 @@ def update_template_from_brew(db: Session, brew_id: int) -> BrewTemplate | None:
     return template
 
 
+def brew_counts(db: Session) -> dict[int, int]:
+    """How many brews have been logged against each template, keyed by template id.
+
+    Used to pre-tick "first brew" on the brew form for a template nothing has
+    been brewed from yet.
+    """
+    from sqlalchemy import func
+
+    rows = (
+        db.query(Brew.template_id, func.count(Brew.id))
+        .filter(Brew.template_id.isnot(None))
+        .group_by(Brew.template_id)
+        .all()
+    )
+    return {tpl_id: count for tpl_id, count in rows}
+
+
 def get_template(db: Session, template_id: int) -> BrewTemplate | None:
     return db.query(BrewTemplate).filter(BrewTemplate.id == template_id).first()
 

@@ -152,6 +152,13 @@
 
 <!-- Rating -->
 <div class="card">
+    {% if brew.brewed_for_friend or brew.is_first_brew %}
+    <p style="margin: 0 0 1rem; font-size: 0.85rem; color: var(--text-muted, #888);">
+        {% if brew.brewed_for_friend %}<span class="badge">👥 Brewed for a friend</span>{% endif %}
+        {% if brew.is_first_brew %}<span class="badge">🎯 First brew — calibrating</span>{% endif %}
+        Not counted in the analytics averages; the beans were still deducted from the shelf.
+    </p>
+    {% endif %}
     {% if brew.rating %}
     <h2>Rating
         <span class="badge badge-score" title="How well you executed the brew">Execution {{ brew.rating.overall_score }}/10</span>
@@ -162,18 +169,13 @@
         {% endif %}
     </h2>
     <div class="detail-grid" style="margin-top: 1rem;">
-        {% for attr in ['bitterness', 'acidity', 'sweetness', 'body', 'aroma', 'aftertaste'] %}
+        {% for attr in RATING_ATTRIBUTES %}
         {% set val = brew.rating[attr] %}
         {% if val is not none %}
         <div class="detail-item">
-            <div class="label">{{ attr|capitalize }}</div>
+            <div class="label">{{ 'Body (mouthfeel)' if attr == 'body' else attr|capitalize }}</div>
             <div class="value">
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <div style="flex: 1; background: var(--border); border-radius: 4px; height: 8px;">
-                        <div style="width: {{ val / 5 * 100 }}%; background: var(--accent); border-radius: 4px; height: 8px;"></div>
-                    </div>
-                    <span>{{ val }}/5</span>
-                </div>
+                <span class="level-badge {{ val | level_of }}">{{ val | level_label }}</span>
             </div>
         </div>
         {% endif %}

@@ -1,5 +1,6 @@
 from datetime import date
 from typing import Annotated
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -21,6 +22,12 @@ from app.services import (
 
 router = APIRouter(tags=["pages"])
 templates = Jinja2Templates(directory="app/templates")
+# Taste attributes render as Low / Neutral / High buckets in both the rating
+# form and the brew detail page.
+templates.env.globals["RATING_ATTRIBUTES"] = rating_service.ATTRIBUTES
+templates.env.globals["RATING_LEVELS"] = rating_service.LEVELS
+templates.env.filters["level_of"] = rating_service.level_of
+templates.env.filters["level_label"] = rating_service.level_label
 
 
 def _parse_time_seconds(value: str, field: str = "time") -> int | None:
@@ -59,6 +66,28 @@ def _parse_int(value: str, field: str) -> int | None:
             status_code=400,
             detail=f"Could not read {field} value {value!r}. Enter a number.",
         )
+
+
+def _parse_url(value: str) -> str | None:
+    """Accept an http(s) product link, adding the scheme if it was left off.
+
+    Anything that isn't http/https is rejected so a stored link can never be a
+    `javascript:` payload when it is rendered as an anchor.
+    """
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    scheme = urlparse(raw).scheme.lower()
+    if not scheme:
+        # Bare host typed without a scheme ("onyxcoffeelab.com/products/…").
+        raw = "https://" + raw
+    parsed = urlparse(raw)
+    if parsed.scheme not in ("http", "https") or "." not in parsed.netloc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not read product link {value!r}. Enter a full http(s) URL.",
+        )
+    return raw[:500]
 
 
 def _get_lookups(db: Session) -> dict:
@@ -107,6 +136,7 @@ def new_brew_form(request: Request, db: Session = Depends(get_db)):
         "today": date.today().isoformat(),
         # Only offer templates whose bean is on the shelf with grams remaining
         "templates_list": template_service.list_templates_on_shelf(db),
+        "template_brew_counts": template_service.brew_counts(db),
         **lookups,
     }
     return templates.TemplateResponse("brew_form.html", ctx)
@@ -145,6 +175,8 @@ def create_brew_form(
     water_filter_type: str = Form(""),
     altitude_ft: str = Form(""),
     notes: str = Form(""),
+    brewed_for_friend: str = Form(""),
+    is_first_brew: str = Form(""),
     template_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
@@ -193,6 +225,8 @@ def create_brew_form(
         water_filter_type=water_filter_type or None,
         altitude_ft=_parse_int(altitude_ft, "altitude"),
         notes=notes or None,
+        brewed_for_friend=bool(brewed_for_friend),
+        is_first_brew=bool(is_first_brew),
         template_id=int(template_id) if template_id else None,
     )
     brew = brew_service.create_brew(db, data)
@@ -257,6 +291,8 @@ def update_brew_form(
     water_filter_type: str = Form(""),
     altitude_ft: str = Form(""),
     notes: str = Form(""),
+    brewed_for_friend: str = Form(""),
+    is_first_brew: str = Form(""),
     template_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
@@ -304,6 +340,8 @@ def update_brew_form(
         water_filter_type=water_filter_type or None,
         altitude_ft=_parse_int(altitude_ft, "altitude"),
         notes=notes or None,
+        brewed_for_friend=bool(brewed_for_friend),
+        is_first_brew=bool(is_first_brew),
         template_id=int(template_id) if template_id else None,
     )
     brew_service.update_brew(db, brew_id, data)
@@ -397,6 +435,7 @@ def create_template_form(
     roast_date: str = Form(""),
     roast_level: str = Form(""),
     flavor_notes_expected: list[str] = Form([]),
+    product_url: str = Form(""),
     bean_amount_grams: str = Form(""),
     grind_setting: str = Form(""),
     grinder: str = Form(""),
@@ -442,6 +481,7 @@ def create_template_form(
         roast_date=date.fromisoformat(roast_date) if roast_date else None,
         roast_level=roast_level or None,
         flavor_notes_expected=notes_str,
+        product_url=_parse_url(product_url),
         bean_amount_grams=float(bean_amount_grams) if bean_amount_grams else None,
         grind_setting=grind_setting or None,
         grinder=grinder or None,
@@ -495,6 +535,7 @@ def update_template_form(
     roast_date: str = Form(""),
     roast_level: str = Form(""),
     flavor_notes_expected: list[str] = Form([]),
+    product_url: str = Form(""),
     bean_amount_grams: str = Form(""),
     grind_setting: str = Form(""),
     grinder: str = Form(""),
@@ -540,6 +581,7 @@ def update_template_form(
         roast_date=date.fromisoformat(roast_date) if roast_date else None,
         roast_level=roast_level or None,
         flavor_notes_expected=notes_str,
+        product_url=_parse_url(product_url),
         bean_amount_grams=float(bean_amount_grams) if bean_amount_grams else None,
         grind_setting=grind_setting or None,
         grinder=grinder or None,

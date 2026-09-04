@@ -60,6 +60,8 @@ with engine.connect() as conn:
             "final_pour_grams": "INTEGER",
             "final_pour_time_seconds": "INTEGER",
             "pour_method": "VARCHAR(50)",
+            "brewed_for_friend": "BOOLEAN DEFAULT 0",
+            "is_first_brew": "BOOLEAN DEFAULT 0",
         }
         for col, col_type in pour_columns.items():
             if col not in brew_cols:
@@ -79,6 +81,7 @@ with engine.connect() as conn:
             "final_pour_time_seconds": "INTEGER",
             "pour_method": "VARCHAR(50)",
             "grind_suggestion_um": "INTEGER",
+            "product_url": "VARCHAR(500)",
         }
         for col, col_type in tpl_columns.items():
             if col not in tpl_cols:

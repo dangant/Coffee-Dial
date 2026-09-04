@@ -12,13 +12,15 @@
         <select onchange="loadTemplate(this)">
             <option value="">— Select a template —</option>
             {% for tpl in templates_list %}
-            <option value="{{ tpl.id }}">
+            <option value="{{ tpl.id }}" data-first-brew="{{ '1' if not template_brew_counts.get(tpl.id) else '0' }}">
                 {% if tpl.roaster and tpl.bean_name and tpl.brew_method %}{{ tpl.roaster }} — {{ tpl.bean_name }} ({{ tpl.brew_method }})
                 {% elif tpl.roaster and tpl.bean_name %}{{ tpl.roaster }} — {{ tpl.bean_name }}
                 {% else %}{{ tpl.name }}{% endif %}
             </option>
             {% endfor %}
         </select>
+        <a id="template-product-link" href="#" target="_blank" rel="noopener noreferrer"
+           style="display: none; margin-top: 0.5rem; font-size: 0.85rem;"></a>
     </div>
     {% endif %}
 
@@ -98,6 +100,10 @@
             <div class="form-group">
                 <label>Water Amount (ml) *</label>
                 <input type="number" step="0.1" name="water_amount_ml" value="{{ brew.water_amount_ml if brew else '' }}" required placeholder="e.g., 300">
+            </div>
+            <div class="form-group full-width" id="dose-scale-notice" style="display: none; align-items: center; gap: 0.75rem; background: rgba(120, 160, 255, 0.08); border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem 0.85rem;">
+                <span class="dose-scale-text" style="font-size: 0.85rem;"></span>
+                <button type="button" class="btn btn-outline btn-sm" onclick="undoDoseScaling()">Undo</button>
             </div>
             <div class="form-group">
                 <label>Grind Setting</label>
@@ -246,6 +252,25 @@
             <div class="form-group full-width">
                 <label>Notes</label>
                 <textarea name="notes" placeholder="Any observations about the brew...">{{ brew.notes or '' if brew else '' }}</textarea>
+            </div>
+            <div class="form-group full-width">
+                <label>Keep out of the stats</label>
+                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                    <label class="checkbox-pill">
+                        <input type="checkbox" name="brewed_for_friend" value="1"
+                            {{ 'checked' if brew and brew.brewed_for_friend else '' }}>
+                        <span>👥 Brewed for a friend</span>
+                    </label>
+                    <label class="checkbox-pill">
+                        <input type="checkbox" name="is_first_brew" value="1" id="first-brew-checkbox"
+                            onchange="this.dataset.touched = '1'"
+                            {{ 'checked' if brew and brew.is_first_brew else '' }}>
+                        <span>🎯 First brew — still calibrating</span>
+                    </label>
+                </div>
+                <small style="color: var(--text-muted, #888);">
+                    Either flag keeps this brew's rating out of the analytics averages. The beans
+                    are still deducted from the shelf, and the brew still shows in your history.</small>
             </div>
         </div>
 

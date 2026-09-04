@@ -1,4 +1,5 @@
-def _create_rated_brew(client, roaster="Onyx", method="Pour Over", score=7.5, taste=None, bean="Test"):
+def _create_rated_brew(client, roaster="Onyx", method="Pour Over", score=7.5, taste=None, bean="Test",
+                       brewed_for_friend=False, is_first_brew=False):
     brew = client.post("/api/v1/brews/", json={
         "brew_date": "2025-01-15",
         "roaster": roaster,
@@ -7,6 +8,8 @@ def _create_rated_brew(client, roaster="Onyx", method="Pour Over", score=7.5, ta
         "water_amount_ml": 300.0,
         "brew_method": method,
         "water_temp_f": 205.0,
+        "brewed_for_friend": brewed_for_friend,
+        "is_first_brew": is_first_brew,
     })
     brew_id = brew.json()["id"]
     payload = {"overall_score": score, "bitterness": 3.0, "acidity": 2.5}
@@ -58,3 +61,46 @@ def test_distributions(client):
     resp = client.get("/api/v1/analytics/distributions?field=brew_method")
     data = resp.json()
     assert len(data) == 2
+
+
+def test_flagged_brews_excluded_from_summary(client):
+    _create_rated_brew(client, score=8.0)
+    _create_rated_brew(client, score=2.0, brewed_for_friend=True)
+    _create_rated_brew(client, score=2.0, is_first_brew=True)
+
+    data = client.get("/api/v1/analytics/summary").json()
+    # All three are brews (the beans were used); only the unflagged one is scored.
+    assert data["total_brews"] == 3
+    assert data["excluded_brews"] == 2
+    assert data["average_score"] == 8.0
+
+    included = client.get("/api/v1/analytics/summary?include_excluded=true").json()
+    assert included["average_score"] == 4.0
+
+
+def test_flagged_brews_excluded_from_charts(client):
+    _create_rated_brew(client, score=8.0)
+    _create_rated_brew(client, score=2.0, brewed_for_friend=True)
+
+    corr = client.get("/api/v1/analytics/correlations?x=bean_amount_grams&y=overall_score").json()
+    assert len(corr) == 1
+    corr_all = client.get(
+        "/api/v1/analytics/correlations?x=bean_amount_grams&y=overall_score&include_excluded=true"
+    ).json()
+    assert len(corr_all) == 2
+
+    trends = client.get("/api/v1/analytics/trends?group_by=day").json()
+    assert trends[0]["avg_score"] == 8.0
+    trends_all = client.get("/api/v1/analytics/trends?group_by=day&include_excluded=true").json()
+    assert trends_all[0]["avg_score"] == 5.0
+
+
+def test_flagged_brew_still_deducts_from_shelf(client):
+    client.post("/api/v1/shelf", json={
+        "bean_name": "Test", "roaster": "Onyx", "initial_amount_grams": 100.0,
+    })
+    _create_rated_brew(client, score=8.0)
+    _create_rated_brew(client, score=2.0, brewed_for_friend=True)
+
+    row = next(r for r in client.get("/api/v1/shelf").json() if r["bean_name"] == "Test")
+    assert row["remaining_grams"] == 64.0  # both 18g brews came off the bag

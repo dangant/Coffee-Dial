@@ -158,6 +158,7 @@ async function commit() {
     btn.disabled = true;
     const notes = (val('f-notes') || '').split(',').map(s => s.trim()).filter(Boolean);
     const payload = {
+        url: (parsed && parsed.url) || document.getElementById('onyx-url').value.trim(),
         product_name: val('f-name') || 'Onyx Coffee',
         bean_name: val('f-name'),
         roaster: val('f-roaster'),

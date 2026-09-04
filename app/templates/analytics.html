@@ -3,6 +3,12 @@
 {% block content %}
 <div class="page-header">
     <h1>Analytics</h1>
+    {% if summary.excluded_brews %}
+    <label class="checkbox-pill" title="Brews made for a friend or flagged as a first brew">
+        <input type="checkbox" id="include-excluded" onchange="reloadStats()">
+        <span>Include friend &amp; first brews ({{ summary.excluded_brews }})</span>
+    </label>
+    {% endif %}
 </div>
 
 <div class="stat-grid">
@@ -11,11 +17,11 @@
         <div class="label">Total Brews</div>
     </div>
     <div class="stat-card">
-        <div class="value">{{ summary.average_score or "—" }}</div>
+        <div class="value" id="stat-avg-execution">{{ summary.average_score or "—" }}</div>
         <div class="label">Avg Execution</div>
     </div>
     <div class="stat-card">
-        <div class="value">{{ summary.average_taste_score or "—" }}</div>
+        <div class="value" id="stat-avg-taste">{{ summary.average_taste_score or "—" }}</div>
         <div class="label">Avg Taste</div>
     </div>
     <div class="stat-card">
@@ -24,14 +30,14 @@
     </div>
     {% if summary.highest_rated_bean %}
     <div class="stat-card">
-        <div class="value">{{ summary.highest_rated_bean.name }}</div>
-        <div class="label">Best Executed ({{ summary.highest_rated_bean.avg_score }})</div>
+        <div class="value" id="stat-best-name">{{ summary.highest_rated_bean.name }}</div>
+        <div class="label">Best Executed (<span id="stat-best-score">{{ summary.highest_rated_bean.avg_score }}</span>)</div>
     </div>
     {% endif %}
     {% if summary.most_enjoyed_bean %}
     <div class="stat-card">
-        <div class="value">{{ summary.most_enjoyed_bean.name }}</div>
-        <div class="label">Most Enjoyed ({{ summary.most_enjoyed_bean.avg_score }})</div>
+        <div class="value" id="stat-enjoyed-name">{{ summary.most_enjoyed_bean.name }}</div>
+        <div class="label">Most Enjoyed (<span id="stat-enjoyed-score">{{ summary.most_enjoyed_bean.avg_score }}</span>)</div>
     </div>
     {% endif %}
 </div>
@@ -180,6 +186,37 @@ const COLORS = [
 
 let trendsChart, distChart, corrChart, roasterChart;
 
+// Ratings from brews made for a friend, or flagged as a first brew while the
+// scoring was still being calibrated, are left out of every stat by default.
+function includeExcluded() {
+    return !!document.getElementById('include-excluded')?.checked;
+}
+
+// Re-pull the headline numbers and both charts when the toggle flips.
+async function reloadStats() {
+    loadTrends();
+    loadCorrelations();
+    try {
+        const params = includeExcluded() ? '?include_excluded=true' : '';
+        const resp = await fetch(`/api/v1/analytics/summary${params}`);
+        if (!resp.ok) return;
+        const d = await resp.json();
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+        set('stat-avg-execution', d.average_score ?? '—');
+        set('stat-avg-taste', d.average_taste_score ?? '—');
+        if (d.highest_rated_bean) {
+            set('stat-best-name', d.highest_rated_bean.name);
+            set('stat-best-score', d.highest_rated_bean.avg_score);
+        }
+        if (d.most_enjoyed_bean) {
+            set('stat-enjoyed-name', d.most_enjoyed_bean.name);
+            set('stat-enjoyed-score', d.most_enjoyed_bean.avg_score);
+        }
+    } catch (e) {
+        console.error('Failed to refresh summary:', e);
+    }
+}
+
 async function loadTrends() {
     const groupBy = document.getElementById('trend-group').value;
     const params = new URLSearchParams({ group_by: groupBy });
@@ -190,6 +227,7 @@ async function loadTrends() {
     if (bean) params.set('bean_name', bean);
     if (grinder) params.set('grinder', grinder);
     params.set('brew_method', method);
+    if (includeExcluded()) params.set('include_excluded', 'true');
     const resp = await fetch(`/api/v1/analytics/trends?${params}`);
     const data = await resp.json();
     if (trendsChart) trendsChart.destroy();
@@ -286,6 +324,7 @@ async function loadCorrelations() {
         if (bean) url += `&bean_name=${encodeURIComponent(bean)}`;
         if (grinder) url += `&grinder=${encodeURIComponent(grinder)}`;
         url += `&brew_method=${encodeURIComponent(method)}`;
+        if (includeExcluded()) url += '&include_excluded=true';
         const resp = await fetch(url);
         if (!resp.ok) { console.error('Correlation fetch failed:', resp.status); return; }
         const data = await resp.json();

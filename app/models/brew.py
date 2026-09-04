@@ -42,6 +42,11 @@ class Brew(Base):
     water_filter_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     altitude_ft: Mapped[int | None] = mapped_column(Integer, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Brews flagged either way still consume beans, but their rating is kept out
+    # of the analytics averages: a friend's cup isn't rated to my taste, and a
+    # first brew is scored before the recipe (or my scoring) has settled.
+    brewed_for_friend: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_first_brew: Mapped[bool] = mapped_column(Boolean, default=False)
     template_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("brew_templates.id", ondelete="SET NULL"), nullable=True
     )
