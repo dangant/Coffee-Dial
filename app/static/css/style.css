@@ -387,3 +387,24 @@ tr:hover { background: rgba(107, 68, 35, 0.03); }
 .level-badge.low { background: rgba(120, 160, 255, 0.15); }
 .level-badge.neutral { background: rgba(140, 140, 140, 0.15); }
 .level-badge.high { background: rgba(255, 150, 90, 0.18); }
+
+/* Wake banner — shown while the sleeping host is being woken before a write */
+.wake-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 1.25rem;
+    transform: translateX(-50%);
+    z-index: 1000;
+    max-width: min(90vw, 30rem);
+    padding: 0.7rem 1.1rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    font-size: 0.9rem;
+    text-align: center;
+}
+.wake-toast.error {
+    border-color: #f44336;
+    color: #f44336;
+}

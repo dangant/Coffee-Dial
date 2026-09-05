@@ -445,3 +445,131 @@ function updateProductLinkPreview() {
 }
 
 document.addEventListener('DOMContentLoaded', updateProductLinkPreview);
+
+// --- Keeping Railway awake ---------------------------------------------------
+// The host sleeps the app after a short idle period. A brew can take four
+// minutes, so by the time the brew or its rating is submitted the service may
+// be cold and the POST fails — and a native form POST navigates away to that
+// error, taking the typed entry with it.
+//
+// Two defences: a heartbeat so it never sleeps while you are mid-entry, and a
+// wake step before any write, which holds the page until the server answers.
+const WAKE_PATH = '/health';
+const HEARTBEAT_MS = 90000;   // comfortably inside the host's idle window
+const FRESH_MS = 20000;       // a ping this recent means "definitely awake"
+const WAKE_TIMEOUT_MS = 90000;
+const nativeFetch = window.fetch.bind(window);
+
+// The page was just served, so the app is provably awake right now.
+let lastAwakeAt = Date.now();
+let wakeInFlight = null;
+
+function isAwake() {
+    return Date.now() - lastAwakeAt < FRESH_MS;
+}
+
+async function ping() {
+    try {
+        const resp = await nativeFetch(WAKE_PATH, { cache: 'no-store' });
+        if (resp.ok) {
+            lastAwakeAt = Date.now();
+            return true;
+        }
+    } catch (e) {
+        // Offline or still booting — the caller decides whether to retry.
+    }
+    return false;
+}
+
+// Resolves true once the server answers, retrying with a short backoff.
+// Concurrent callers share one attempt.
+function wakeUp() {
+    if (isAwake()) return Promise.resolve(true);
+    if (wakeInFlight) return wakeInFlight;
+    wakeInFlight = (async () => {
+        const deadline = Date.now() + WAKE_TIMEOUT_MS;
+        let delay = 1000;
+        while (Date.now() < deadline) {
+            if (await ping()) return true;
+            await new Promise(r => setTimeout(r, delay));
+            delay = Math.min(delay + 1000, 5000);
+        }
+        return false;
+    })();
+    wakeInFlight.finally(() => { wakeInFlight = null; });
+    return wakeInFlight;
+}
+
+// Heartbeat, only while a form is on screen and the tab is visible, so an idle
+// dashboard tab never keeps the service running.
+function startHeartbeat() {
+    if (!document.querySelector('form[method="post"]')) return;
+    setInterval(() => { if (!document.hidden) ping(); }, HEARTBEAT_MS);
+    // Coming back to the tab is the moment right before you click something.
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) ping();
+    });
+}
+
+// --- Wake toast --------------------------------------------------------------
+function wakeToast(message, isError) {
+    let el = document.getElementById('wake-toast');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'wake-toast';
+        el.className = 'wake-toast';
+        document.body.appendChild(el);
+    }
+    el.textContent = message;
+    el.classList.toggle('error', !!isError);
+    el.hidden = false;
+}
+
+function hideWakeToast() {
+    const el = document.getElementById('wake-toast');
+    if (el) el.hidden = true;
+}
+
+// --- Native form POSTs -------------------------------------------------------
+// Capture phase so this runs before any page-level submit handler.
+document.addEventListener('submit', event => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    if ((form.method || '').toLowerCase() !== 'post') return;
+    if (form.dataset.wakeChecked === '1' || isAwake()) return;
+
+    event.preventDefault();
+    const buttons = form.querySelectorAll('button[type="submit"], button:not([type])');
+    buttons.forEach(b => { b.disabled = true; });
+    wakeToast('Waking the server… your entry is safe.');
+
+    wakeUp().then(ok => {
+        buttons.forEach(b => { b.disabled = false; });
+        if (ok) {
+            hideWakeToast();
+            // form.submit() does not re-fire this event, so there is no loop;
+            // the flag is belt and braces for handlers that call requestSubmit().
+            form.dataset.wakeChecked = '1';
+            form.submit();
+        } else {
+            wakeToast("Couldn't reach the server. Nothing was lost — press save again.", true);
+        }
+    });
+}, true);
+
+// --- fetch-based writes ------------------------------------------------------
+// Wake first for anything that changes data, wherever it is called from.
+window.fetch = async function (input, init) {
+    const method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    const sameOrigin = !/^https?:\/\//i.test(url) || url.startsWith(window.location.origin);
+    if (sameOrigin && method !== 'GET' && method !== 'HEAD' && !isAwake()) {
+        wakeToast('Waking the server…');
+        const ok = await wakeUp();
+        hideWakeToast();
+        if (!ok) wakeToast("Couldn't reach the server. Nothing was lost — try again.", true);
+    }
+    return nativeFetch(input, init);
+};
+
+startHeartbeat();
