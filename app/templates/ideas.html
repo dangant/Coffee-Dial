@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}Ideas - Coffee Data{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Enhancement Ideas</h1>
+    <p style="color: var(--text-muted, #888); margin-top: 0.25rem;">Jot an idea down as it comes to you, then tick it off once it ships.</p>
+</div>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <h2 style="margin-top:0;">Add an Idea</h2>
+    <div class="form-group" style="margin-bottom:0.75rem;">
+        <label>Idea *</label>
+        <input type="text" id="idea-title" maxlength="200" placeholder="e.g. Warn me when a bag is older than 3 weeks"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();addIdea();}">
+    </div>
+    <div class="form-group" style="margin-bottom:0.75rem;">
+        <label>Details</label>
+        <textarea id="idea-details" placeholder="Anything worth remembering about how it should work (optional)"></textarea>
+    </div>
+    <button class="btn btn-primary" onclick="addIdea()">Add Idea</button>
+    <span id="add-msg" style="margin-left:0.75rem; font-size:0.85rem; color:#888;"></span>
+</div>
+
+<div class="card">
+    <h2 style="margin-top:0;">Open <span id="open-count" style="color: var(--text-muted, #888); font-weight:normal;"></span></h2>
+    <div id="open-list"></div>
+</div>
+
+<details id="done-wrap" class="card" style="margin-top:1.5rem;" hidden>
+    <summary style="cursor:pointer; color: var(--primary); font-weight:600;">Done (<span id="done-count">0</span>)</summary>
+    <div id="done-list" style="margin-top:1rem;"></div>
+</details>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .idea-row {
+        display: flex;
+        gap: 0.75rem;
+        align-items: flex-start;
+        padding: 0.85rem 0;
+        border-bottom: 1px solid var(--border);
+    }
+    .idea-row:last-child { border-bottom: none; }
+    .idea-row input[type="checkbox"] { margin-top: 0.25rem; flex-shrink: 0; }
+    .idea-body { flex: 1; min-width: 0; }
+    .idea-title { font-weight: 600; word-wrap: break-word; }
+    .idea-details { color: var(--text-muted, #888); font-size: 0.9rem; white-space: pre-wrap; margin-top: 0.2rem; }
+    .idea-meta { color: var(--text-muted, #888); font-size: 0.78rem; margin-top: 0.3rem; }
+    .idea-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
+    .idea-row.done .idea-title { text-decoration: line-through; opacity: 0.7; }
+</style>
+<script>
+let ideas = [];
+
+async function loadIdeas() {
+    try {
+        const resp = await fetch('/api/v1/ideas');
+        if (!resp.ok) return;
+        ideas = await resp.json();
+        render();
+    } catch (e) {
+        console.error('Failed to load ideas:', e);
+    }
+}
+
+// Ideas are user-entered text and go into innerHTML, so escape before rendering.
+function esc(s) {
+    return (s ?? '').replace(/[&<>"']/g, ch => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+    ));
+}
+
+function fmtDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso + (iso.endsWith('Z') ? '' : 'Z'));
+    return isNaN(d) ? '' : d.toLocaleDateString();
+}
+
+function rowHtml(idea) {
+    const done = idea.is_done;
+    const stamp = done
+        ? `done ${fmtDate(idea.completed_at)}`
+        : `added ${fmtDate(idea.created_at)}`;
+    return `
+        <div class="idea-row ${done ? 'done' : ''}" id="idea-${idea.id}">
+            <input type="checkbox" ${done ? 'checked' : ''} onchange="setDone(${idea.id}, this.checked)"
+                title="${done ? 'Reopen this idea' : 'Mark as done'}">
+            <div class="idea-body">
+                <div class="idea-title">${esc(idea.title)}</div>
+                ${idea.details ? `<div class="idea-details">${esc(idea.details)}</div>` : ''}
+                <div class="idea-meta">${stamp}</div>
+            </div>
+            <div class="idea-actions">
+                <button class="btn btn-outline btn-sm" onclick="startEdit(${idea.id})">Edit</button>
+                <button class="btn btn-danger btn-sm" onclick="removeIdea(${idea.id})">Delete</button>
+            </div>
+        </div>`;
+}
+
+function render() {
+    const open = ideas.filter(i => !i.is_done);
+    const done = ideas.filter(i => i.is_done);
+
+    document.getElementById('open-count').textContent = open.length ? `(${open.length})` : '';
+    document.getElementById('open-list').innerHTML = open.length
+        ? open.map(rowHtml).join('')
+        : `<p style="color: var(--text-muted, #888); padding: 1rem 0; margin:0;">
+               ${done.length ? 'Nothing open — everything is done.' : 'No ideas yet. Add the first one above.'}
+           </p>`;
+
+    const wrap = document.getElementById('done-wrap');
+    wrap.hidden = done.length === 0;
+    document.getElementById('done-count').textContent = done.length;
+    document.getElementById('done-list').innerHTML = done.map(rowHtml).join('');
+}
+
+async function addIdea() {
+    const titleEl = document.getElementById('idea-title');
+    const detailsEl = document.getElementById('idea-details');
+    const msg = document.getElementById('add-msg');
+    const title = titleEl.value.trim();
+    msg.style.color = '#888';
+    if (!title) { msg.style.color = '#f44336'; msg.textContent = 'Give the idea a title first.'; return; }
+    try {
+        const resp = await fetch('/api/v1/ideas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, details: detailsEl.value.trim() || null }),
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            msg.style.color = '#f44336';
+            msg.textContent = err.detail || 'Could not save that idea.';
+            return;
+        }
+        titleEl.value = '';
+        detailsEl.value = '';
+        msg.textContent = 'Added.';
+        setTimeout(() => { msg.textContent = ''; }, 2000);
+        titleEl.focus();
+        loadIdeas();
+    } catch (e) {
+        msg.style.color = '#f44336';
+        msg.textContent = 'Network error: ' + e.message;
+    }
+}
+
+async function save(id, body) {
+    const resp = await fetch(`/api/v1/ideas/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+        alert('Could not save that change.');
+        loadIdeas();
+        return false;
+    }
+    loadIdeas();
+    return true;
+}
+
+function setDone(id, isDone) {
+    save(id, { is_done: isDone });
+}
+
+async function removeIdea(id) {
+    const idea = ideas.find(i => i.id === id);
+    if (!confirm(`Delete "${idea ? idea.title : 'this idea'}"?`)) return;
+    const resp = await fetch(`/api/v1/ideas/${id}`, { method: 'DELETE' });
+    if (!resp.ok) alert('Could not delete that idea.');
+    loadIdeas();
+}
+
+// Swap a row into inputs in place, so an idea can be reworded without retyping it.
+function startEdit(id) {
+    const idea = ideas.find(i => i.id === id);
+    if (!idea) return;
+    const row = document.getElementById(`idea-${id}`);
+    row.innerHTML = `
+        <div class="idea-body">
+            <div class="form-group" style="margin-bottom:0.5rem;">
+                <input type="text" id="edit-title-${id}" maxlength="200" value="${esc(idea.title)}">
+            </div>
+            <div class="form-group" style="margin-bottom:0.5rem;">
+                <textarea id="edit-details-${id}" placeholder="Details (optional)">${esc(idea.details || '')}</textarea>
+            </div>
+            <div style="display:flex; gap:0.5rem;">
+                <button class="btn btn-primary btn-sm" onclick="commitEdit(${id})">Save</button>
+                <button class="btn btn-outline btn-sm" onclick="render()">Cancel</button>
+            </div>
+        </div>`;
+    document.getElementById(`edit-title-${id}`).focus();
+}
+
+function commitEdit(id) {
+    const title = document.getElementById(`edit-title-${id}`).value.trim();
+    if (!title) { alert('An idea needs a title.'); return; }
+    save(id, { title, details: document.getElementById(`edit-details-${id}`).value.trim() || null });
+}
+
+loadIdeas();
+</script>
+{% endblock %}

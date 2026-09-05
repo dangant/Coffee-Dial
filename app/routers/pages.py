@@ -659,6 +659,11 @@ def shelf_page(request: Request):
     return templates.TemplateResponse("shelf.html", {"request": request})
 
 
+@router.get("/ideas", response_class=HTMLResponse)
+def ideas_page(request: Request):
+    return templates.TemplateResponse("ideas.html", {"request": request})
+
+
 # Data Management page
 @router.get("/data", response_class=HTMLResponse)
 def data_page(request: Request):

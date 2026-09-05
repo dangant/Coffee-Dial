@@ -13,6 +13,7 @@ from app.models.brew import Brew
 from app.models.rating import Rating
 from app.models.template import BrewTemplate
 from app.models.inventory import BeanInventory
+from app.models.idea import Idea
 from app.models.lookups import FlavorNote, BrewDevice, Grinder, BrewMethod
 
 router = APIRouter(prefix="/api/v1/data", tags=["data"])
@@ -42,6 +43,7 @@ def export_all(db: Session = Depends(get_db)):
     brew_devices = [_row_to_dict(d) for d in db.query(BrewDevice).all()]
     brew_methods = [_row_to_dict(m) for m in db.query(BrewMethod).all()]
     grinders = [_row_to_dict(g) for g in db.query(Grinder).all()]
+    ideas = [_row_to_dict(i) for i in db.query(Idea).all()]
 
     payload = {
         "version": EXPORT_VERSION,
@@ -54,6 +56,7 @@ def export_all(db: Session = Depends(get_db)):
         "brew_devices": brew_devices,
         "brew_methods": brew_methods,
         "grinders": grinders,
+        "ideas": ideas,
     }
 
     buf = BytesIO(json.dumps(payload, indent=2).encode())
@@ -100,6 +103,8 @@ def import_all(file: UploadFile = File(...), db: Session = Depends(get_db)):
     db.query(BrewDevice).delete()
     db.query(BrewMethod).delete()
     db.query(Grinder).delete()
+    if "ideas" in data:
+        db.query(Idea).delete()
     db.flush()
 
     counts = {}
@@ -243,6 +248,19 @@ def import_all(file: UploadFile = File(...), db: Session = Depends(get_db)):
             updated_at=_parse_datetime(i.get("updated_at")),
         ))
     counts["bean_inventory"] = len(data.get("bean_inventory", []))
+
+    # --- Enhancement ideas ---
+    for i in data.get("ideas", []):
+        db.add(Idea(
+            id=i["id"],
+            title=i["title"],
+            details=i.get("details"),
+            is_done=i.get("is_done", False),
+            completed_at=_parse_datetime(i.get("completed_at")),
+            created_at=_parse_datetime(i.get("created_at")),
+            updated_at=_parse_datetime(i.get("updated_at")),
+        ))
+    counts["ideas"] = len(data.get("ideas", []))
 
     db.commit()
 
