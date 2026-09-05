@@ -85,11 +85,23 @@ with engine.connect() as conn:
             # it — so the flags are added plain and backfilled below.
             "brewed_for_friend": "BOOLEAN",
             "is_first_brew": "BOOLEAN",
+            "grind_suggestion_um": "INTEGER",
         }
         for col, col_type in pour_columns.items():
             _add_column(conn, "brews", col, col_type, brew_cols)
         for col in ("brewed_for_friend", "is_first_brew"):
             conn.execute(text(f"UPDATE brews SET {col} = FALSE WHERE {col} IS NULL"))
+        # Seed the micron size on brews logged before the column existed. The
+        # template they were brewed from is the only record of it, so it is the
+        # best estimate available; brews with no template stay blank.
+        if "grind_suggestion_um" not in brew_cols and "brew_templates" in tables:
+            conn.execute(text("""
+                UPDATE brews SET grind_suggestion_um = (
+                    SELECT t.grind_suggestion_um FROM brew_templates t
+                    WHERE t.id = brews.template_id
+                )
+                WHERE grind_suggestion_um IS NULL AND template_id IS NOT NULL
+            """))
         conn.commit()
 
     # Add per-pour schedule + grind suggestion columns to existing brew_templates tables

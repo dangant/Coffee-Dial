@@ -20,6 +20,10 @@ class Brew(Base):
     flavor_notes_expected: Mapped[str | None] = mapped_column(Text, nullable=True)
     bean_amount_grams: Mapped[float] = mapped_column(Float, nullable=False)
     grind_setting: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Particle size in microns for this brew's grind setting. Recorded per brew
+    # rather than read off the template, so dialing the template later doesn't
+    # rewrite what past brews were ground at.
+    grind_suggestion_um: Mapped[int | None] = mapped_column(Integer, nullable=True)
     grinder: Mapped[str | None] = mapped_column(String(100), nullable=True)
     bloom: Mapped[bool] = mapped_column(Boolean, default=False)
     bloom_time_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)

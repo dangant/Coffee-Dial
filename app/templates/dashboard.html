@@ -44,6 +44,7 @@
                 <th>Bean</th>
                 <th>Method</th>
                 <th>Grind</th>
+                <th>Size (µm)</th>
                 <th>Grinder</th>
                 <th>Score (E / T)</th>
             </tr>
@@ -56,6 +57,7 @@
                 <td>{{ brew.bean_name }}</td>
                 <td>{{ brew.brew_method }}</td>
                 <td>{{ brew.grind_setting or '—' }}</td>
+                <td>{{ brew.grind_suggestion_um ~ 'µm' if brew.grind_suggestion_um else '—' }}</td>
                 <td>{{ brew.grinder or '—' }}</td>
                 <td>
                     {% if brew.rating %}

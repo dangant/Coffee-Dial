@@ -155,6 +155,7 @@ def create_brew_form(
     flavor_notes_expected: list[str] = Form([]),
     bean_amount_grams: float = Form(...),
     grind_setting: str = Form(""),
+    grind_suggestion_um: str = Form(""),
     grinder: str = Form(""),
     bloom_time_seconds: str = Form(""),
     bloom_water_ml: str = Form(""),
@@ -203,6 +204,7 @@ def create_brew_form(
         flavor_notes_expected=notes_str,
         bean_amount_grams=bean_amount_grams,
         grind_setting=grind_setting or None,
+        grind_suggestion_um=_parse_int(grind_suggestion_um, "grind size (µm)"),
         grinder=grinder or None,
         # Bloom is derived: it happened iff any bloom field was recorded
         bloom=bool(bloom_water_ml or bloom_time_seconds or bloom_pour_time_seconds),
@@ -271,6 +273,7 @@ def update_brew_form(
     flavor_notes_expected: list[str] = Form([]),
     bean_amount_grams: float = Form(...),
     grind_setting: str = Form(""),
+    grind_suggestion_um: str = Form(""),
     grinder: str = Form(""),
     bloom_time_seconds: str = Form(""),
     bloom_water_ml: str = Form(""),
@@ -318,6 +321,7 @@ def update_brew_form(
         flavor_notes_expected=notes_str,
         bean_amount_grams=bean_amount_grams,
         grind_setting=grind_setting or None,
+        grind_suggestion_um=_parse_int(grind_suggestion_um, "grind size (µm)"),
         grinder=grinder or None,
         # Bloom is derived: it happened iff any bloom field was recorded
         bloom=bool(bloom_water_ml or bloom_time_seconds or bloom_pour_time_seconds),

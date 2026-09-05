@@ -14,6 +14,7 @@ class BrewBase(BaseModel):
     flavor_notes_expected: str | None = None
     bean_amount_grams: float
     grind_setting: str | None = None
+    grind_suggestion_um: int | None = None
     grinder: str | None = None
     bloom: bool = False
     bloom_time_seconds: int | None = None
@@ -55,6 +56,7 @@ class BrewUpdate(BaseModel):
     flavor_notes_expected: str | None = None
     bean_amount_grams: float | None = None
     grind_setting: str | None = None
+    grind_suggestion_um: int | None = None
     grinder: str | None = None
     bloom: bool | None = None
     bloom_time_seconds: int | None = None

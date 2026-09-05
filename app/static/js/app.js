@@ -2,7 +2,7 @@
 function resetBrewForm() {
     const allFields = [
         'roaster', 'bean_name', 'bean_origin', 'bean_process', 'roast_date',
-        'roast_level', 'bean_amount_grams', 'grind_setting', 'grinder',
+        'roast_level', 'bean_amount_grams', 'grind_setting', 'grind_suggestion_um', 'grinder',
         'bloom_time_seconds', 'bloom_water_ml', 'bloom_pour_time_seconds',
         'first_pour_grams', 'first_pour_time_seconds',
         'second_pour_grams', 'second_pour_time_seconds',
@@ -54,6 +54,7 @@ async function loadTemplate(selectEl) {
             roaster: 'roaster', bean_name: 'bean_name', bean_origin: 'bean_origin',
             bean_process: 'bean_process', roast_date: 'roast_date', roast_level: 'roast_level',
             bean_amount_grams: 'bean_amount_grams', grind_setting: 'grind_setting',
+            grind_suggestion_um: 'grind_suggestion_um',
             grinder: 'grinder', bloom_time_seconds: 'bloom_time_seconds',
             bloom_water_ml: 'bloom_water_ml', water_amount_ml: 'water_amount_ml',
             brew_method: 'brew_method', brew_device: 'brew_device',
