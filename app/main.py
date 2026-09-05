@@ -31,6 +31,26 @@ Base.metadata.create_all(bind=engine)
 
 # Migrate: add missing columns / drop replaced tables
 from sqlalchemy import text, inspect
+
+
+def _add_column(conn, table: str, column: str, col_type: str, existing: list[str]) -> None:
+    """Add a column if it isn't there yet, tolerating a concurrent add.
+
+    Gunicorn runs several workers and each one imports this module, so two of
+    them can race on the same ALTER. Postgres has IF NOT EXISTS, which makes the
+    statement a no-op for the loser; SQLite has no such clause, but it only runs
+    single-process in development.
+    """
+    if column in existing:
+        return
+    if conn.dialect.name == "postgresql":
+        conn.execute(
+            text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}")
+        )
+    else:
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+
+
 with engine.connect() as conn:
     inspector = inspect(engine)
     tables = inspector.get_table_names()
@@ -60,12 +80,16 @@ with engine.connect() as conn:
             "final_pour_grams": "INTEGER",
             "final_pour_time_seconds": "INTEGER",
             "pour_method": "VARCHAR(50)",
-            "brewed_for_friend": "BOOLEAN DEFAULT 0",
-            "is_first_brew": "BOOLEAN DEFAULT 0",
+            # No DEFAULT on the booleans: Postgres rejects "DEFAULT 0" for a
+            # boolean column (no implicit int -> bool cast), while SQLite accepts
+            # it — so the flags are added plain and backfilled below.
+            "brewed_for_friend": "BOOLEAN",
+            "is_first_brew": "BOOLEAN",
         }
         for col, col_type in pour_columns.items():
-            if col not in brew_cols:
-                conn.execute(text(f"ALTER TABLE brews ADD COLUMN {col} {col_type}"))
+            _add_column(conn, "brews", col, col_type, brew_cols)
+        for col in ("brewed_for_friend", "is_first_brew"):
+            conn.execute(text(f"UPDATE brews SET {col} = FALSE WHERE {col} IS NULL"))
         conn.commit()
 
     # Add per-pour schedule + grind suggestion columns to existing brew_templates tables
@@ -84,21 +108,17 @@ with engine.connect() as conn:
             "product_url": "VARCHAR(500)",
         }
         for col, col_type in tpl_columns.items():
-            if col not in tpl_cols:
-                conn.execute(text(f"ALTER TABLE brew_templates ADD COLUMN {col} {col_type}"))
+            _add_column(conn, "brew_templates", col, col_type, tpl_cols)
         conn.commit()
 
     # Add price column to existing bean_inventory tables
     if "bean_inventory" in tables:
         inv_cols = [c["name"] for c in inspector.get_columns("bean_inventory")]
-        if "price" not in inv_cols:
-            conn.execute(text("ALTER TABLE bean_inventory ADD COLUMN price FLOAT"))
-            conn.commit()
-        if "used_offset_grams" not in inv_cols:
-            conn.execute(
-                text("ALTER TABLE bean_inventory ADD COLUMN used_offset_grams FLOAT DEFAULT 0")
-            )
-            conn.commit()
+        _add_column(conn, "bean_inventory", "price", "FLOAT", inv_cols)
+        _add_column(
+            conn, "bean_inventory", "used_offset_grams", "FLOAT DEFAULT 0", inv_cols
+        )
+        conn.commit()
 
     # Reconcile brew_devices to the current preferred set on already-seeded DBs.
     # brew.brew_device is stored as a plain string, so removing lookup rows does
