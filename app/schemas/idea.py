@@ -9,13 +9,15 @@ class IdeaBase(BaseModel):
 
 
 class IdeaCreate(IdeaBase):
-    pass
+    # Gated by default; unticking is a deliberate grant of authority.
+    needs_review: bool = True
 
 
 class IdeaUpdate(BaseModel):
     title: str | None = Field(default=None, max_length=200)
     details: str | None = None
     is_done: bool | None = None
+    needs_review: bool | None = None
 
 
 class IdeaScreenshotRead(BaseModel):
@@ -40,6 +42,7 @@ class IdeaScreenshotRead(BaseModel):
 class IdeaRead(IdeaBase):
     id: int
     is_done: bool
+    needs_review: bool = True
     completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime

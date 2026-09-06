@@ -273,6 +273,8 @@ def import_all(file: UploadFile = File(...), db: Session = Depends(get_db)):
             title=i["title"],
             details=i.get("details"),
             is_done=i.get("is_done", False),
+            # Backups from before the gate existed restore as gated, never as auto.
+            needs_review=i.get("needs_review", True),
             completed_at=_parse_datetime(i.get("completed_at")),
             created_at=_parse_datetime(i.get("created_at")),
             updated_at=_parse_datetime(i.get("updated_at")),

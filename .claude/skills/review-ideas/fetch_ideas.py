@@ -141,6 +141,8 @@ def _norm(idea) -> dict:
         "title": get("title"),
         "details": get("details"),
         "is_done": bool(get("is_done")),
+        # A deployment predating the gate must never read as an implement-freely grant.
+        "needs_review": bool(get("needs_review")) if get("needs_review") is not None else True,
         "created_at": str(created) if created is not None else None,
         "screenshots": [_norm_shot(s) for s in (get("screenshots") or [])],
     }

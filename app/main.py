@@ -123,6 +123,14 @@ with engine.connect() as conn:
             "pour_method": "VARCHAR(50)",
             "grind_suggestion_um": "INTEGER",
             "product_url": "VARCHAR(500)",
+            # Onyx attribute wheel
+            "bean_variety": "VARCHAR(100)",
+            "drying_method": "VARCHAR(100)",
+            "harvest_season": "VARCHAR(100)",
+            "production_roaster": "VARCHAR(100)",
+            "preferred_extraction": "VARCHAR(100)",
+            "caffeine_mg": "VARCHAR(50)",
+            "coffee_summary": "TEXT",
         }
         for col, col_type in tpl_columns.items():
             _add_column(conn, "brew_templates", col, col_type, tpl_cols)
@@ -135,6 +143,14 @@ with engine.connect() as conn:
         _add_column(
             conn, "bean_inventory", "used_offset_grams", "FLOAT DEFAULT 0", inv_cols
         )
+        conn.commit()
+
+    # Gate flag on ideas. Added with no DEFAULT and backfilled: Postgres rejects
+    # "DEFAULT 0" on a boolean, which is what broke a deploy in 32dbda9.
+    if "ideas" in tables:
+        idea_cols = [c["name"] for c in inspector.get_columns("ideas")]
+        _add_column(conn, "ideas", "needs_review", "BOOLEAN", idea_cols)
+        conn.execute(text("UPDATE ideas SET needs_review = TRUE WHERE needs_review IS NULL"))
         conn.commit()
 
     # Reconcile brew_devices to the current preferred set on already-seeded DBs.

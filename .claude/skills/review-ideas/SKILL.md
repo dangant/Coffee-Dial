@@ -56,10 +56,35 @@ the real functions you intend to reuse. Note that there are no auto-migrations �
 tables go through `Base.metadata.create_all()` in `app/main.py` and column additions
 through inline `ALTER TABLE` there.
 
-## 5. Plan every open idea
+## 5. Split by `needs_review`
 
-Call `EnterPlanMode`, then write **one plan file covering all open ideas**, a section per
-idea, each with:
+Each idea carries a `needs_review` flag. It decides your authority over that idea, and the
+two groups are handled differently in the same pass.
+
+**`needs_review: true` — plan only.** The default, and how every idea used to be treated.
+
+**`needs_review: false` — implement it.** The user has explicitly granted this: build it,
+test it, commit it, and push to `main`, then report what shipped. No approval round trip.
+
+Treat a missing flag as `true`. Never infer the grant from an idea looking small.
+
+### The comprehension gate
+
+Auto-implement means "no round trip when the path is clear" — not "build on a guess". Even
+with the flag off, **stop and report instead of building** when:
+
+- The idea is ambiguous enough that two readings would produce different work.
+- Doing it needs a decision that is the user's to make, not a default you can pick.
+- It touches something you should not do unreviewed: deleting or rewriting existing data,
+  a destructive migration, auth, secrets, or anything affecting production records.
+
+Say plainly which ideas you stopped on and what you'd need to proceed. An idea held back
+for a good reason is a better outcome than a confident wrong build.
+
+## 6. Plan the gated ones
+
+If any open idea has `needs_review: true`, call `EnterPlanMode` and write **one plan file
+covering those ideas**, a section per idea, each with:
 
 - What it changes and why (tie it back to the idea as the user wrote it).
 - The specific files to modify, and existing functions to reuse.
@@ -67,9 +92,13 @@ idea, each with:
   (`python -m pytest -q`).
 
 If the ideas interact — shared model, same page, one blocked on another — say so and
-recommend an order.
+recommend an order. End the turn with `ExitPlanMode`.
 
-## 6. Stop
+For gated ideas, write no application code and do not commit: the user reviews and approves
+those before they are implemented.
 
-Do not write application code, and do not commit. The user reviews and approves each idea
-before it is implemented. End the turn with `ExitPlanMode`.
+## 7. Report
+
+Close with what happened to each open idea: shipped (with the commit), planned and awaiting
+approval, or held back with the reason. Never tick an idea done in the app — that is the
+user's call.

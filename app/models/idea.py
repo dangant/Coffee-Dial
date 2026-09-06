@@ -15,6 +15,10 @@ class Idea(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_done: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Gates what Claude may do with this idea during "Review ideas": true means plan
+    # and stop, false is an explicit grant to implement and push without a round trip.
+    # Defaults to true — forgetting to tick a box must not ship something unreviewed.
+    needs_review: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # Stamped when the idea is ticked, cleared if it is reopened.
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

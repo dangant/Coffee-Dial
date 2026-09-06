@@ -228,3 +228,65 @@ def test_restoring_a_backup_does_not_leave_orphan_screenshots(client, db):
     db.expire_all()
     assert db.query(IdeaScreenshot).count() == 0
     assert [i["title"] for i in client.get("/api/v1/ideas").json()] == ["Has an image"]
+
+
+# --- Review gate ---------------------------------------------------------
+
+
+def test_ideas_are_gated_by_default(client):
+    """Forgetting to tick a box must not grant Claude push access to an idea."""
+    assert _add(client).json()["needs_review"] is True
+
+
+def test_the_gate_can_be_lifted_at_creation(client):
+    resp = client.post("/api/v1/ideas",
+                       json={"title": "Small tweak", "needs_review": False})
+    assert resp.json()["needs_review"] is False
+
+
+def test_the_gate_toggles(client):
+    idea = _add(client).json()
+
+    lifted = client.put(f"/api/v1/ideas/{idea['id']}", json={"needs_review": False})
+    assert lifted.json()["needs_review"] is False
+
+    restored = client.put(f"/api/v1/ideas/{idea['id']}", json={"needs_review": True})
+    assert restored.json()["needs_review"] is True
+
+
+def test_toggling_the_gate_leaves_the_rest_alone(client):
+    idea = _add(client, details="keep me").json()
+
+    client.put(f"/api/v1/ideas/{idea['id']}", json={"needs_review": False})
+
+    after = client.get("/api/v1/ideas").json()[0]
+    assert after["details"] == "keep me"
+    assert after["is_done"] is False
+
+
+def test_the_gate_survives_a_backup_round_trip(client):
+    client.post("/api/v1/ideas", json={"title": "Auto one", "needs_review": False})
+    _add(client, title="Gated one")
+
+    dump = client.get("/api/v1/data/export").json()
+    resp = client.post(
+        "/api/v1/data/import",
+        files={"file": ("backup.json", json.dumps(dump), "application/json")},
+    )
+    assert resp.status_code == 200
+
+    gates = {i["title"]: i["needs_review"] for i in client.get("/api/v1/ideas").json()}
+    assert gates == {"Auto one": False, "Gated one": True}
+
+
+def test_a_pre_gate_backup_restores_as_gated(client):
+    """An old export has no needs_review key — those ideas must not become auto."""
+    old_backup = {
+        "version": 1, "brews": [], "ratings": [], "brew_templates": [],
+        "ideas": [{"id": 1, "title": "From an old backup", "is_done": False}],
+    }
+
+    client.post("/api/v1/data/import",
+                files={"file": ("old.json", json.dumps(old_backup), "application/json")})
+
+    assert client.get("/api/v1/ideas").json()[0]["needs_review"] is True

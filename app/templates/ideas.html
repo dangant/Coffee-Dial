@@ -26,6 +26,16 @@
                onchange="addPending(this.files); this.value='';">
         <div id="pending-shots" class="shot-strip"></div>
     </div>
+    <div class="form-group" style="margin-bottom:0.75rem;">
+        <label style="display:flex; align-items:center; gap:0.5rem; font-weight:normal;">
+            <input type="checkbox" id="idea-needs-review" checked>
+            Needs my review before Claude implements it
+        </label>
+        <p style="color:var(--text-muted,#888); font-size:0.8rem; margin:0.2rem 0 0;">
+            Untick for something small and well-specified — "Review ideas" will build,
+            commit and push it without waiting for you.
+        </p>
+    </div>
     <button class="btn btn-primary" onclick="addIdea()">Add Idea</button>
     <span id="add-msg" style="margin-left:0.75rem; font-size:0.85rem; color:#888;"></span>
 </div>
@@ -58,6 +68,10 @@
     .idea-meta { color: var(--text-muted, #888); font-size: 0.78rem; margin-top: 0.3rem; }
     .idea-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
     .idea-row.done .idea-title { text-decoration: line-through; opacity: 0.7; }
+    .auto-badge {
+        display: inline-block; padding: 0.05rem 0.4rem; border-radius: 3px;
+        background: #e8f5e9; color: #2e7d32; font-size: 0.72rem; font-weight: 600;
+    }
 
     .shot-strip { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
     .shot { position: relative; line-height: 0; }
@@ -198,7 +212,8 @@ function rowHtml(idea) {
                 <div class="idea-title">${esc(idea.title)}</div>
                 ${idea.details ? `<div class="idea-details">${esc(idea.details)}</div>` : ''}
                 ${shotsHtml(idea.screenshots)}
-                <div class="idea-meta">${stamp}</div>
+                <div class="idea-meta">${stamp}${idea.needs_review === false
+                    ? ' · <span class="auto-badge">auto-implement</span>' : ''}</div>
             </div>
             <div class="idea-actions">
                 <button class="btn btn-outline btn-sm" onclick="startEdit(${idea.id})">Edit</button>
@@ -235,7 +250,11 @@ async function addIdea() {
         const resp = await fetch('/api/v1/ideas', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, details: detailsEl.value.trim() || null }),
+            body: JSON.stringify({
+                title,
+                details: detailsEl.value.trim() || null,
+                needs_review: document.getElementById('idea-needs-review').checked,
+            }),
         });
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
@@ -261,6 +280,7 @@ async function addIdea() {
         }
         titleEl.value = '';
         detailsEl.value = '';
+        document.getElementById('idea-needs-review').checked = true;
         msg.textContent = 'Added.';
         setTimeout(() => { msg.textContent = ''; }, 2000);
         titleEl.focus();
@@ -312,6 +332,12 @@ function startEdit(id) {
                 <textarea id="edit-details-${id}" placeholder="Details (optional)">${esc(idea.details || '')}</textarea>
             </div>
             <div class="form-group" style="margin-bottom:0.5rem;">
+                <label style="display:flex; align-items:center; gap:0.5rem; font-weight:normal;">
+                    <input type="checkbox" id="edit-review-${id}" ${idea.needs_review === false ? '' : 'checked'}>
+                    Needs my review before Claude implements it
+                </label>
+            </div>
+            <div class="form-group" style="margin-bottom:0.5rem;">
                 <label style="font-size:0.85rem;">Screenshots — paste with Ctrl+V, or pick a file</label>
                 <input type="file" accept="image/*" multiple
                        onchange="attachWhileEditing(${id}, this.files)">
@@ -356,7 +382,11 @@ async function attachWhileEditing(id, files) {
 function commitEdit(id) {
     const title = document.getElementById(`edit-title-${id}`).value.trim();
     if (!title) { alert('An idea needs a title.'); return; }
-    save(id, { title, details: document.getElementById(`edit-details-${id}`).value.trim() || null });
+    save(id, {
+        title,
+        details: document.getElementById(`edit-details-${id}`).value.trim() || null,
+        needs_review: document.getElementById(`edit-review-${id}`).checked,
+    });
 }
 
 loadIdeas();
