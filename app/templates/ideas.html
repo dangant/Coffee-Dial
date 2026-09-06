@@ -6,7 +6,7 @@
     <p style="color: var(--text-muted, #888); margin-top: 0.25rem;">Jot an idea down as it comes to you, then tick it off once it ships.</p>
 </div>
 
-<div class="card" style="margin-bottom: 1.5rem;">
+<div class="card" id="add-card" style="margin-bottom: 1.5rem;">
     <h2 style="margin-top:0;">Add an Idea</h2>
     <div class="form-group" style="margin-bottom:0.75rem;">
         <label>Idea *</label>
@@ -16,6 +16,15 @@
     <div class="form-group" style="margin-bottom:0.75rem;">
         <label>Details</label>
         <textarea id="idea-details" placeholder="Anything worth remembering about how it should work (optional)"></textarea>
+    </div>
+    <div class="form-group" style="margin-bottom:0.75rem;">
+        <label>Screenshots</label>
+        <p style="color:var(--text-muted,#888); font-size:0.82rem; margin:0 0 0.4rem;">
+            Paste one with Ctrl+V while this box is focused, or pick a file.
+        </p>
+        <input type="file" id="idea-files" accept="image/*" multiple
+               onchange="addPending(this.files); this.value='';">
+        <div id="pending-shots" class="shot-strip"></div>
     </div>
     <button class="btn btn-primary" onclick="addIdea()">Add Idea</button>
     <span id="add-msg" style="margin-left:0.75rem; font-size:0.85rem; color:#888;"></span>
@@ -49,9 +58,108 @@
     .idea-meta { color: var(--text-muted, #888); font-size: 0.78rem; margin-top: 0.3rem; }
     .idea-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
     .idea-row.done .idea-title { text-decoration: line-through; opacity: 0.7; }
+
+    .shot-strip { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+    .shot { position: relative; line-height: 0; }
+    .shot img {
+        height: 72px; width: auto; max-width: 160px; object-fit: cover;
+        border: 1px solid var(--border); border-radius: 4px; cursor: zoom-in;
+    }
+    .shot-x {
+        position: absolute; top: -6px; right: -6px;
+        width: 20px; height: 20px; padding: 0; line-height: 18px;
+        border: 1px solid var(--border); border-radius: 50%;
+        background: var(--bg, #fff); color: #f44336;
+        font-size: 0.85rem; cursor: pointer;
+    }
+    #lightbox {
+        position: fixed; inset: 0; z-index: 50; cursor: zoom-out;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex; align-items: center; justify-content: center; padding: 2rem;
+    }
+    #lightbox img { max-width: 100%; max-height: 100%; border-radius: 4px; }
 </style>
 <script>
 let ideas = [];
+// Images chosen before the idea exists — an idea has to be created first for them
+// to hang off, so they wait here until addIdea() has an id.
+let pendingFiles = [];
+
+function imagesFromPaste(event) {
+    return [...(event.clipboardData?.items || [])]
+        .filter(i => i.kind === 'file' && i.type.startsWith('image/'))
+        .map(i => i.getAsFile())
+        .filter(Boolean);
+}
+
+function addPending(files) {
+    for (const f of files) {
+        if (f && f.type.startsWith('image/')) pendingFiles.push(f);
+    }
+    renderPending();
+}
+
+function removePending(index) {
+    pendingFiles.splice(index, 1);
+    renderPending();
+}
+
+function renderPending() {
+    const wrap = document.getElementById('pending-shots');
+    wrap.querySelectorAll('img').forEach(img => URL.revokeObjectURL(img.src));
+    wrap.innerHTML = pendingFiles.map((f, i) => `
+        <span class="shot">
+            <img src="${URL.createObjectURL(f)}" alt="">
+            <button type="button" class="shot-x" title="Remove" onclick="removePending(${i})">&times;</button>
+        </span>`).join('');
+}
+
+function shotsHtml(shots) {
+    if (!shots || !shots.length) return '';
+    return `<div class="shot-strip">${shots.map(s => `
+        <span class="shot">
+            <img src="${s.url}" alt="${esc(s.filename)}" loading="lazy" onclick="openLightbox('${s.url}')">
+            <button type="button" class="shot-x" title="Delete screenshot" onclick="deleteShot(${s.id})">&times;</button>
+        </span>`).join('')}</div>`;
+}
+
+async function uploadShot(ideaId, file) {
+    const body = new FormData();
+    body.append('file', file, file.name || 'screenshot.png');
+    const resp = await fetch(`/api/v1/ideas/${ideaId}/screenshots`, { method: 'POST', body });
+    if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || 'Could not save that image.');
+    }
+    return resp.json();
+}
+
+async function deleteShot(id) {
+    if (!confirm('Delete this screenshot?')) return;
+    const resp = await fetch(`/api/v1/ideas/screenshots/${id}`, { method: 'DELETE' });
+    if (!resp.ok) alert('Could not delete that screenshot.');
+    loadIdeas();
+}
+
+function openLightbox(url) {
+    const box = document.createElement('div');
+    box.id = 'lightbox';
+    box.innerHTML = `<img src="${url}" alt="">`;
+    box.onclick = () => box.remove();
+    document.body.appendChild(box);
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') document.getElementById('lightbox')?.remove();
+});
+
+// Screenshots live on the clipboard, so paste is the main way in.
+document.getElementById('add-card').addEventListener('paste', e => {
+    const files = imagesFromPaste(e);
+    if (!files.length) return;
+    e.preventDefault();
+    addPending(files);
+});
 
 async function loadIdeas() {
     try {
@@ -89,6 +197,7 @@ function rowHtml(idea) {
             <div class="idea-body">
                 <div class="idea-title">${esc(idea.title)}</div>
                 ${idea.details ? `<div class="idea-details">${esc(idea.details)}</div>` : ''}
+                ${shotsHtml(idea.screenshots)}
                 <div class="idea-meta">${stamp}</div>
             </div>
             <div class="idea-actions">
@@ -133,6 +242,22 @@ async function addIdea() {
             msg.style.color = '#f44336';
             msg.textContent = err.detail || 'Could not save that idea.';
             return;
+        }
+        const created = await resp.json();
+        if (pendingFiles.length) {
+            msg.textContent = `Uploading ${pendingFiles.length} image(s)…`;
+            try {
+                for (const file of pendingFiles) await uploadShot(created.id, file);
+            } catch (e) {
+                msg.style.color = '#f44336';
+                msg.textContent = 'Idea saved, but an image failed: ' + e.message;
+                pendingFiles = [];
+                renderPending();
+                loadIdeas();
+                return;
+            }
+            pendingFiles = [];
+            renderPending();
         }
         titleEl.value = '';
         detailsEl.value = '';
@@ -186,12 +311,46 @@ function startEdit(id) {
             <div class="form-group" style="margin-bottom:0.5rem;">
                 <textarea id="edit-details-${id}" placeholder="Details (optional)">${esc(idea.details || '')}</textarea>
             </div>
+            <div class="form-group" style="margin-bottom:0.5rem;">
+                <label style="font-size:0.85rem;">Screenshots — paste with Ctrl+V, or pick a file</label>
+                <input type="file" accept="image/*" multiple
+                       onchange="attachWhileEditing(${id}, this.files)">
+                ${shotsHtml(idea.screenshots)}
+                <span id="edit-shot-msg-${id}" style="font-size:0.8rem; color:#888;"></span>
+            </div>
             <div style="display:flex; gap:0.5rem;">
                 <button class="btn btn-primary btn-sm" onclick="commitEdit(${id})">Save</button>
                 <button class="btn btn-outline btn-sm" onclick="render()">Cancel</button>
             </div>
         </div>`;
+    // The idea already exists here, so pasted images upload straight away.
+    row.addEventListener('paste', e => {
+        const files = imagesFromPaste(e);
+        if (!files.length) return;
+        e.preventDefault();
+        attachWhileEditing(id, files);
+    });
     document.getElementById(`edit-title-${id}`).focus();
+}
+
+async function attachWhileEditing(id, files) {
+    const msg = document.getElementById(`edit-shot-msg-${id}`);
+    const images = [...files].filter(f => f.type.startsWith('image/'));
+    if (!images.length) return;
+    if (msg) { msg.style.color = '#888'; msg.textContent = 'Uploading…'; }
+    try {
+        for (const file of images) await uploadShot(id, file);
+    } catch (e) {
+        if (msg) { msg.style.color = '#f44336'; msg.textContent = e.message; }
+        return;
+    }
+    // Refresh the data, then reopen the editor so the edit isn't lost mid-flow.
+    const title = document.getElementById(`edit-title-${id}`)?.value;
+    const details = document.getElementById(`edit-details-${id}`)?.value;
+    await loadIdeas();
+    startEdit(id);
+    if (title !== undefined) document.getElementById(`edit-title-${id}`).value = title;
+    if (details !== undefined) document.getElementById(`edit-details-${id}`).value = details;
 }
 
 function commitEdit(id) {

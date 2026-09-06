@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
@@ -20,4 +20,12 @@ class Idea(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    # Deleting an idea takes its screenshots with it rather than orphaning the rows.
+    screenshots: Mapped[list["IdeaScreenshot"]] = relationship(  # noqa: F821
+        "IdeaScreenshot",
+        cascade="all, delete-orphan",
+        order_by="IdeaScreenshot.created_at",
+        lazy="selectin",
     )

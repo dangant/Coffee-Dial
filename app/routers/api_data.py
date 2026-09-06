@@ -14,6 +14,7 @@ from app.models.rating import Rating
 from app.models.template import BrewTemplate
 from app.models.inventory import BeanInventory
 from app.models.idea import Idea
+from app.models.idea_screenshot import IdeaScreenshot
 from app.models.lookups import FlavorNote, BrewDevice, Grinder, BrewMethod
 
 router = APIRouter(prefix="/api/v1/data", tags=["data"])
@@ -43,7 +44,12 @@ def export_all(db: Session = Depends(get_db)):
     brew_devices = [_row_to_dict(d) for d in db.query(BrewDevice).all()]
     brew_methods = [_row_to_dict(m) for m in db.query(BrewMethod).all()]
     grinders = [_row_to_dict(g) for g in db.query(Grinder).all()]
-    ideas = [_row_to_dict(i) for i in db.query(Idea).all()]
+    # Screenshot bytes stay out of the JSON backup — excluded explicitly because the
+    # relationship is eager-loaded and would otherwise land in __dict__.
+    ideas = [
+        _row_to_dict(i, exclude=("_sa_instance_state", "screenshots"))
+        for i in db.query(Idea).all()
+    ]
 
     payload = {
         "version": EXPORT_VERSION,
@@ -104,6 +110,9 @@ def import_all(file: UploadFile = File(...), db: Session = Depends(get_db)):
     db.query(BrewMethod).delete()
     db.query(Grinder).delete()
     if "ideas" in data:
+        # Bulk delete skips the ORM cascade, and restored ideas reuse their old ids —
+        # so clear screenshots explicitly or they would reattach to different ideas.
+        db.query(IdeaScreenshot).delete()
         db.query(Idea).delete()
     db.flush()
 

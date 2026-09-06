@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class IdeaBase(BaseModel):
@@ -18,11 +18,31 @@ class IdeaUpdate(BaseModel):
     is_done: bool | None = None
 
 
+class IdeaScreenshotRead(BaseModel):
+    id: int
+    idea_id: int
+    filename: str
+    content_type: str
+    width: int
+    height: int
+    byte_size: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+    @computed_field
+    @property
+    def url(self) -> str:
+        """Where the bytes live, so the page never has to build this path itself."""
+        return f"/api/v1/ideas/screenshots/{self.id}"
+
+
 class IdeaRead(IdeaBase):
     id: int
     is_done: bool
     completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+    screenshots: list[IdeaScreenshotRead] = []
 
     model_config = {"from_attributes": True}

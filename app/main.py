@@ -27,6 +27,7 @@ from app.services.recommendation_service import seed_rules
 # Import all models so Base.metadata knows about them
 import app.models.inventory  # noqa: F401
 import app.models.idea  # noqa: F401
+import app.models.idea_screenshot  # noqa: F401
 
 # Create tables
 Base.metadata.create_all(bind=engine)
