@@ -124,6 +124,23 @@ tr:hover { background: rgba(107, 68, 35, 0.03); }
     color: var(--text);
 }
 .form-group textarea { min-height: 80px; resize: vertical; }
+/* The width/padding above are meant for text fields. Applied to a checkbox they
+   stretch the box and shove its label away from it, so opt those back out. */
+.form-group input[type="checkbox"],
+.form-group input[type="radio"] {
+    width: auto;
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--primary);
+}
+/* A checkbox sitting next to its own wording, rather than above it like a field label. */
+.check-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
