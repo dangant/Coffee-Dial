@@ -78,6 +78,48 @@ def delete_inventory(db: Session, inv_id: int) -> bool:
     return True
 
 
+def _dose_lookup(db: Session) -> dict:
+    """Per-bean brew doses, taken from that bean's own templates.
+
+    Beans don't share a dose — an Onyx pour over might call for 16g or 25g depending
+    on the coffee — so the shelf prices a cup using the recipe saved for that bean
+    rather than one number applied to everything. Keyed by (bean_name, roaster) and
+    also by bean_name alone, so a shelf entry still matches when the roaster differs.
+    The most recently created template wins when a bean has several for one method.
+    """
+    from app.models.template import BrewTemplate
+
+    rows = (
+        db.query(
+            BrewTemplate.bean_name,
+            BrewTemplate.roaster,
+            BrewTemplate.brew_method,
+            BrewTemplate.bean_amount_grams,
+        )
+        .filter(
+            BrewTemplate.bean_name.isnot(None),
+            BrewTemplate.bean_amount_grams.isnot(None),
+        )
+        .order_by(BrewTemplate.id)
+        .all()
+    )
+
+    lookup: dict = {}
+    for bean_name, roaster, method, grams in rows:
+        field = "espresso_dose" if (method or "").strip().lower() == "espresso" else "pour_over_dose"
+        for key in ((bean_name, roaster), (bean_name, None)):
+            lookup.setdefault(key, {})[field] = grams
+    return lookup
+
+
+def _doses_for(lookup: dict, bean_name: str, roaster: str | None) -> dict:
+    match = lookup.get((bean_name, roaster)) or lookup.get((bean_name, None)) or {}
+    return {
+        "pour_over_dose": match.get("pour_over_dose"),
+        "espresso_dose": match.get("espresso_dose"),
+    }
+
+
 def _grams_used(db: Session, bean_name: str, roaster: str | None) -> float:
     q = db.query(func.sum(Brew.bean_amount_grams)).filter(Brew.bean_name == bean_name)
     if roaster:
@@ -92,6 +134,7 @@ def list_shelf(db: Session) -> list[dict]:
     """
     inventory = db.query(BeanInventory).order_by(BeanInventory.bean_name).all()
     inv_keys = {(i.bean_name, i.roaster) for i in inventory}
+    doses = _dose_lookup(db)
 
     # Beans from brew history not yet tracked
     brew_beans = (
@@ -124,6 +167,7 @@ def list_shelf(db: Session) -> list[dict]:
                 "used_grams": round(used, 1),
                 "remaining_grams": round(remaining, 1),
                 "tracked": True,
+                **_doses_for(doses, inv.bean_name, inv.roaster),
             }
         )
 
@@ -141,6 +185,7 @@ def list_shelf(db: Session) -> list[dict]:
                     "used_grams": round(used, 1),
                     "remaining_grams": None,
                     "tracked": False,
+                    **_doses_for(doses, bean_name, roaster),
                 }
             )
 

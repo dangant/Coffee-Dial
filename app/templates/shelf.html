@@ -52,8 +52,10 @@
                 <option value="pour_over">Pour Over</option>
                 <option value="espresso">Espresso</option>
             </select>
+            <span style="color:var(--text-muted, #888);" title="Each bean uses the dose from its own template. This applies only to beans with no recipe for the selected method.">fallback</span>
             <input type="number" id="cost-dose" min="1" step="1" value="25"
-                   style="width:70px;" onchange="onCostDoseChange()" title="Grams in one cup">
+                   style="width:64px;" onchange="onCostDoseChange()"
+                   title="Dose used for beans that have no template for this method">
             <span style="color:var(--text-muted, #888);">g</span>
         </div>
     </div>
@@ -109,8 +111,23 @@ function costMethod() {
     return document.getElementById('cost-method').value;
 }
 
-function costDose() {
+function fallbackDose() {
     return parseFloat(document.getElementById('cost-dose').value) || DEFAULT_DOSES[costMethod()];
+}
+
+// Beans don't share a dose — this coffee wants 18g, that one 25g — so each row is
+// priced with the dose from its own template, falling back only when there isn't one.
+function doseFor(row) {
+    const own = costMethod() === 'espresso' ? row.espresso_dose : row.pour_over_dose;
+    return own || fallbackDose();
+}
+
+function doseSource(row) {
+    const own = costMethod() === 'espresso' ? row.espresso_dose : row.pour_over_dose;
+    const label = costMethod() === 'espresso' ? 'Espresso' : 'Pour Over';
+    return own
+        ? `${own}g from this bean's ${label} template`
+        : `No ${label} template for this bean — using the ${fallbackDose()}g fallback`;
 }
 
 function initCostControls() {
@@ -130,7 +147,7 @@ function onCostMethodChange() {
 }
 
 function onCostDoseChange() {
-    store(`shelfCostDose_${costMethod()}`, costDose());
+    store(`shelfCostDose_${costMethod()}`, fallbackDose());
     renderTracked();
 }
 
@@ -215,7 +232,7 @@ function renderTracked() {
                         placeholder="$"
                         style="width:80px;"
                         onkeydown="if(event.key==='Enter') updateEntry(${r.id}, '${esc(r.bean_name)}', '${esc(r.roaster || '')}')">
-                    ${r.price_per_gram != null ? `<span style="font-size:0.75rem; color:#888;">$${(r.price_per_gram * costDose()).toFixed(2)}/cup · ${costDose()}g</span>` : ''}
+                    ${r.price_per_gram != null ? `<span style="font-size:0.75rem; color:#888;" title="${doseSource(r)}">$${(r.price_per_gram * doseFor(r)).toFixed(2)}/cup · ${doseFor(r)}g</span>` : ''}
                 </div>
             </td>
             <td>${r.used_grams}g</td>

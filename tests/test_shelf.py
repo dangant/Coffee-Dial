@@ -75,3 +75,70 @@ def test_shelf_api_exposes_price_per_gram(client):
 
     rows = client.get("/api/v1/shelf").json()
     assert rows[0]["price_per_gram"] == 37.0 / 283.5
+
+
+def _template(client, bean_name, method, grams, roaster="Onyx", name=None):
+    return client.post("/api/v1/templates/", json={
+        "name": name or f"{bean_name} — {method} {grams}",
+        "bean_name": bean_name,
+        "roaster": roaster,
+        "brew_method": method,
+        "bean_amount_grams": grams,
+    })
+
+
+def test_dose_comes_from_the_beans_own_templates(db, client):
+    """A cup is priced with this bean's recipe, not one dose applied to everything."""
+    assert _template(client, "Ratnagiri", "Pour Over", 18.0).status_code in (200, 201)
+    assert _template(client, "Ratnagiri", "Espresso", 19.0).status_code in (200, 201)
+    inventory_service.upsert_inventory(
+        db, bean_name="Ratnagiri", roaster="Onyx", initial_grams=113.4, price=20.0
+    )
+
+    row = _row(db)
+    assert row["pour_over_dose"] == 18.0
+    assert row["espresso_dose"] == 19.0
+    # $20 / 113.4g over an 18 g pour over, not the 25 g default.
+    assert round(row["price_per_gram"] * row["pour_over_dose"], 2) == 3.17
+
+
+def test_doses_are_none_without_a_template(db):
+    inventory_service.upsert_inventory(
+        db, bean_name="Ratnagiri", roaster="Onyx", initial_grams=113.4, price=20.0
+    )
+
+    row = _row(db)
+    assert row["pour_over_dose"] is None
+    assert row["espresso_dose"] is None
+
+
+def test_dose_matches_on_bean_name_when_the_roaster_differs(db, client):
+    """Shelf entries and templates don't always spell the roaster the same way."""
+    _template(client, "Iloma Station", "Pour Over", 16.0, roaster="Onyx Coffee Lab")
+    inventory_service.upsert_inventory(
+        db, bean_name="Iloma Station", roaster="Onyx", initial_grams=251.0, price=32.0
+    )
+
+    assert _row(db, "Iloma Station")["pour_over_dose"] == 16.0
+
+
+def test_latest_template_wins_for_a_method(db, client):
+    _template(client, "Ratnagiri", "Pour Over", 16.0)
+    _template(client, "Ratnagiri", "Pour Over", 22.0)
+    inventory_service.upsert_inventory(
+        db, bean_name="Ratnagiri", roaster="Onyx", initial_grams=113.4, price=20.0
+    )
+
+    assert _row(db)["pour_over_dose"] == 22.0
+
+
+def test_non_espresso_methods_count_as_pour_over(db, client):
+    """Anything that isn't espresso is brewed by the cup, so it shares that slot."""
+    _template(client, "Ratnagiri", "French Press", 30.0)
+    inventory_service.upsert_inventory(
+        db, bean_name="Ratnagiri", roaster="Onyx", initial_grams=113.4, price=20.0
+    )
+
+    row = _row(db)
+    assert row["pour_over_dose"] == 30.0
+    assert row["espresso_dose"] is None
