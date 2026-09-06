@@ -225,3 +225,178 @@ def test_attributes_are_persisted_by_the_commit(db):
     assert len(rows) == 2
     assert all(r.bean_variety == "Catuai" for r in rows)
     assert all(r.drying_method == "Raised-Bed Dried" for r in rows)
+
+
+# --- Backfilling existing templates from their saved link -----------------
+
+import pytest
+
+
+@pytest.fixture
+def fake_onyx(monkeypatch):
+    """Stand in for the network so backfill tests are deterministic and offline."""
+    from app.services import onyx_import_service
+
+    calls = []
+
+    def _parse(url):
+        calls.append(url)
+        return _payload(
+            bean_origin="India", bean_process="Thermal-Shock", bean_variety="Catuai",
+            drying_method="Raised-Bed Dried", harvest_season="December",
+            production_roaster="Diedrich CR-35", roast_level="Light Agtron #129",
+            coffee_summary="About this coffee.",
+            espresso={"dose_g": 19.0, "yield_g": 40.0, "time_s": 28},
+            pour_over={"coffee_g": 18.0, "water_g": 280.0, "temp_f": 202.0, "steps": []},
+        )
+
+    monkeypatch.setattr(onyx_import_service, "parse_onyx", _parse)
+    return calls
+
+
+URL = "https://onyxcoffeelab.com/products/india-ratnagiri-natural"
+
+
+def _stored_template(client, **fields):
+    body = {"name": "Ratnagiri — Pour Over", "bean_name": "India Ratnagiri",
+            "brew_method": "Pour Over", "product_url": URL}
+    body.update(fields)
+    return client.post("/api/v1/templates/", json=body).json()
+
+
+def test_backfill_fills_empty_fields(client, db, fake_onyx):
+    from app.services.onyx_import_service import backfill_templates
+
+    tpl = _stored_template(client)
+
+    result = backfill_templates(db)
+
+    assert result["templates_updated"] == 1
+    from app.models.template import BrewTemplate
+    row = db.query(BrewTemplate).filter(BrewTemplate.id == tpl["id"]).first()
+    db.refresh(row)
+    assert row.bean_variety == "Catuai"
+    assert row.drying_method == "Raised-Bed Dried"
+    assert row.roast_level == "Light Agtron #129"
+
+
+def test_backfill_never_overwrites_an_existing_value(client, db, fake_onyx):
+    """A field you tuned by hand stays yours."""
+    from app.models.template import BrewTemplate
+    from app.services.onyx_import_service import backfill_templates
+
+    tpl = _stored_template(client, bean_variety="My own note", bean_amount_grams=21.0)
+
+    backfill_templates(db)
+
+    row = db.query(BrewTemplate).filter(BrewTemplate.id == tpl["id"]).first()
+    db.refresh(row)
+    assert row.bean_variety == "My own note"
+    assert row.bean_amount_grams == 21.0
+
+
+def test_backfill_matches_the_recipe_to_the_brew_method(client, db, fake_onyx):
+    """An espresso template must not inherit pour-over water figures."""
+    from app.models.template import BrewTemplate
+    from app.services.onyx_import_service import backfill_templates
+
+    esp = _stored_template(client, name="Ratnagiri — Espresso", brew_method="Espresso")
+    pour = _stored_template(client, name="Ratnagiri — Pour Over 2", brew_method="Pour Over")
+
+    backfill_templates(db)
+
+    e = db.query(BrewTemplate).filter(BrewTemplate.id == esp["id"]).first()
+    p = db.query(BrewTemplate).filter(BrewTemplate.id == pour["id"]).first()
+    db.refresh(e); db.refresh(p)
+    assert e.bean_amount_grams == 19.0  # espresso dose
+    assert e.water_amount_ml is None  # espresso has no pour-over water
+    assert p.bean_amount_grams == 18.0
+    assert p.water_amount_ml == 280.0
+
+
+def test_backfill_fetches_each_url_once(client, db, fake_onyx):
+    """An Onyx import makes two templates per coffee — one fetch should serve both."""
+    from app.services.onyx_import_service import backfill_templates
+
+    _stored_template(client, name="Ratnagiri — Espresso", brew_method="Espresso")
+    _stored_template(client, name="Ratnagiri — Pour Over 2")
+
+    result = backfill_templates(db)
+
+    assert fake_onyx == [URL]
+    assert result["urls_fetched"] == 1
+    assert result["templates_updated"] == 2
+
+
+def test_backfill_ignores_templates_without_a_link(client, db, fake_onyx):
+    from app.services.onyx_import_service import backfill_templates
+
+    client.post("/api/v1/templates/", json={"name": "Hand-made", "brew_method": "Pour Over"})
+
+    result = backfill_templates(db)
+
+    assert result["templates_examined"] == 0
+    assert fake_onyx == []
+
+
+def test_dry_run_reports_without_writing(client, db, fake_onyx):
+    from app.models.template import BrewTemplate
+    from app.services.onyx_import_service import backfill_templates
+
+    tpl = _stored_template(client)
+
+    result = backfill_templates(db, dry_run=True)
+
+    assert result["dry_run"] is True
+    assert result["templates_updated"] == 1
+    row = db.query(BrewTemplate).filter(BrewTemplate.id == tpl["id"]).first()
+    db.refresh(row)
+    assert row.bean_variety is None
+
+
+def test_an_unreachable_page_is_reported_not_raised(client, db, monkeypatch):
+    """One dead link must not sink the whole backfill."""
+    from app.services import onyx_import_service
+    from app.services.onyx_import_service import OnyxImportError, backfill_templates
+
+    _stored_template(client)
+
+    def _boom(url):
+        raise OnyxImportError("Onyx returned 404 for that URL — check the link.")
+
+    monkeypatch.setattr(onyx_import_service, "parse_onyx", _boom)
+
+    result = backfill_templates(db)
+
+    assert result["templates_updated"] == 0
+    assert result["skipped"][0]["error"].startswith("Onyx returned 404")
+
+
+def test_backfill_endpoint(client, db, fake_onyx):
+    _stored_template(client)
+
+    resp = client.post("/api/v1/import/onyx/backfill?dry_run=true")
+
+    assert resp.status_code == 200
+    assert resp.json()["templates_updated"] == 1
+
+
+@pytest.mark.parametrize("raw", ["N/A", "Unknown Agtron #", "unknown", "TBD", "-", "  "])
+def test_placeholder_wheel_values_are_dropped(raw):
+    """A blank can still be filled in later; "Unknown" looks like an answer."""
+    from app.services.onyx_import_service import _wheel_stats
+
+    stats = _wheel_stats(_soup(_wheel_html({"harvest": raw, "agtron": raw})))
+
+    assert stats["harvest_season"] is None
+    assert stats["roast_level"] is None
+
+
+def test_real_values_that_merely_look_odd_are_kept():
+    from app.services.onyx_import_service import _wheel_stats
+
+    stats = _wheel_stats(_soup(_wheel_html({"harvest": "Rotating Microlots",
+                                            "agtron": "Light Agtron #130"})))
+
+    assert stats["harvest_season"] == "Rotating Microlots"
+    assert stats["roast_level"] == "Light Agtron #130"

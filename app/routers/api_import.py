@@ -48,6 +48,15 @@ def preview_onyx(body: PreviewRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/onyx/backfill")
+def backfill_onyx(dry_run: bool = False, db: Session = Depends(get_db)):
+    """Refill empty fields on every template that still has its Onyx product link.
+
+    Fills blanks only — never overwrites a value you already have.
+    """
+    return onyx_import_service.backfill_templates(db, dry_run=dry_run)
+
+
 @router.post("/onyx/commit")
 def commit_onyx(body: CommitRequest, db: Session = Depends(get_db)):
     if not body.product_name.strip():

@@ -168,6 +168,22 @@ _WHEEL_FIELDS = {
 }
 
 
+# Onyx fills unknown wheel entries with placeholders rather than omitting them
+# ("N/A" harvest, "Unknown Agtron #" roast). Storing those is worse than a blank,
+# because a blank can still be filled in later while "Unknown" looks answered.
+_PLACEHOLDERS = {"n/a", "na", "none", "unknown", "tbd", "-", "—", "?"}
+
+
+def _clean_stat(value: str | None) -> str | None:
+    text = (value or "").strip()
+    if not text:
+        return None
+    lowered = text.lower().rstrip(" #")
+    if lowered in _PLACEHOLDERS or lowered.startswith("unknown"):
+        return None
+    return text
+
+
 def _wheel_stats(soup: BeautifulSoup) -> dict:
     """Read the attribute wheel into template fields, best-effort like everything here."""
     out = {field: None for field in _WHEEL_FIELDS.values()}
@@ -183,7 +199,7 @@ def _wheel_stats(soup: BeautifulSoup) -> dict:
         if label:
             label.extract()
         value = re.sub(r"\s+", " ", para.get_text(" ", strip=True)).strip()
-        out[field] = value or None
+        out[field] = _clean_stat(value)
 
     # The wheel's abstract entry only reads "Coffee Summary" — the prose is in the
     # centre panel, so it needs its own selector.
@@ -379,6 +395,83 @@ def build_templates(data: dict) -> tuple[TemplateCreate, TemplateCreate]:
         **shared,
     )
     return espresso, pour_over
+
+
+# Never touched by a backfill: the name is the template's identity, and the URL is the
+# key the backfill matched on in the first place.
+_BACKFILL_SKIP = {"name", "product_url"}
+
+
+def _is_blank(value) -> bool:
+    """Only a genuinely empty field is refilled. False and 0 are answers, not gaps."""
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    return False
+
+
+def backfill_templates(db: Session, dry_run: bool = False) -> dict:
+    """Refetch each template's Onyx page and fill in fields that are still empty.
+
+    Only fills blanks — anything already set is left alone, including recipe numbers
+    that may have been tuned by hand since the import. A template is matched to the
+    espresso or pour-over recipe by its own brew_method, so an espresso template never
+    inherits pour-over water figures. Each URL is fetched once however many templates
+    share it, since an Onyx import creates two per coffee.
+    """
+    from collections import defaultdict
+
+    from app.models.template import BrewTemplate
+
+    rows = (
+        db.query(BrewTemplate)
+        .filter(BrewTemplate.product_url.isnot(None), BrewTemplate.product_url != "")
+        .order_by(BrewTemplate.id)
+        .all()
+    )
+
+    by_url = defaultdict(list)
+    for row in rows:
+        by_url[row.product_url.strip()].append(row)
+
+    results, fetched, skipped = [], 0, []
+    for url, templates in by_url.items():
+        try:
+            data = parse_onyx(url)
+            espresso, pour_over = build_templates(data)
+            fetched += 1
+        except OnyxImportError as e:
+            skipped.append({"url": url, "error": str(e),
+                            "templates": [t.name for t in templates]})
+            continue
+
+        for tpl in templates:
+            is_espresso = (tpl.brew_method or "").strip().lower() == "espresso"
+            source = espresso if is_espresso else pour_over
+            filled = {}
+            for field, value in source.model_dump().items():
+                if field in _BACKFILL_SKIP or _is_blank(value):
+                    continue
+                if _is_blank(getattr(tpl, field, None)):
+                    filled[field] = value
+                    if not dry_run:
+                        setattr(tpl, field, value)
+            if filled:
+                results.append({"id": tpl.id, "name": tpl.name, "filled": filled})
+
+    if not dry_run and results:
+        db.commit()
+
+    return {
+        "dry_run": dry_run,
+        "templates_examined": len(rows),
+        "urls_fetched": fetched,
+        "templates_updated": len(results),
+        "fields_filled": sum(len(r["filled"]) for r in results),
+        "updated": results,
+        "skipped": skipped,
+    }
 
 
 def _unique_name(db: Session, name: str) -> str:
