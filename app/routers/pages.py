@@ -654,6 +654,11 @@ def grind_lab_page(request: Request):
 
 
 # On the Shelf page
+@router.get("/tiers", response_class=HTMLResponse)
+def tiers_page(request: Request):
+    return templates.TemplateResponse("tiers.html", {"request": request})
+
+
 @router.get("/shelf", response_class=HTMLResponse)
 def shelf_page(request: Request):
     return templates.TemplateResponse("shelf.html", {"request": request})

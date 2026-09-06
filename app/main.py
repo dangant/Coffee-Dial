@@ -18,6 +18,7 @@ from app.routers import (
     api_ratings,
     api_recommendations,
     api_shelf,
+    api_tiers,
     api_templates,
     pages,
 )
@@ -28,6 +29,7 @@ from app.services.recommendation_service import seed_rules
 import app.models.inventory  # noqa: F401
 import app.models.idea  # noqa: F401
 import app.models.idea_screenshot  # noqa: F401
+import app.models.tier_entry  # noqa: F401
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -192,6 +194,7 @@ app.include_router(api_recommendations.router)
 app.include_router(api_lookups.router)
 app.include_router(api_grind_lab.router)
 app.include_router(api_shelf.router)
+app.include_router(api_tiers.router)
 app.include_router(api_import.router)
 app.include_router(api_ideas.router)
 app.include_router(api_data.router)

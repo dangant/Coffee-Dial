@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% block title %}Tiers - Coffee Data{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Coffee Tiers</h1>
+    <p style="color: var(--text-muted, #888); margin-top: 0.25rem;">
+        Rank every coffee you've had, then see what the rankings say about your taste.
+    </p>
+</div>
+
+<div class="card" style="margin-bottom:1.5rem;">
+    <div id="tier-board"></div>
+</div>
+
+<div class="card" style="margin-bottom:1.5rem;">
+    <h2 style="margin-top:0;">Unranked <span id="unranked-count" style="color:var(--text-muted,#888); font-weight:normal;"></span></h2>
+    <p style="color:#888; font-size:0.85rem; margin:-0.25rem 0 0.75rem;">
+        Every coffee with a template or a logged brew, plus anything you add below. Drag one
+        onto a tier, or use its dropdown.
+    </p>
+    <div id="unranked-row" class="tier-drop" data-tier=""></div>
+</div>
+
+<div class="card" style="margin-bottom:1.5rem;">
+    <h2 style="margin-top:0;">Add a Coffee</h2>
+    <p style="color:#888; font-size:0.85rem; margin:-0.25rem 0 0.75rem;">
+        For coffees you drank before tracking them here — no template or brew needed.
+    </p>
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
+        <div class="form-group" style="flex:2; min-width:160px; margin:0;">
+            <label>Coffee Name *</label>
+            <input type="text" id="new-bean" placeholder="e.g. Kenya Nyeri AA">
+        </div>
+        <div class="form-group" style="flex:1; min-width:130px; margin:0;">
+            <label>Roaster</label>
+            <input type="text" id="new-roaster" list="roaster-suggestions">
+            <datalist id="roaster-suggestions"></datalist>
+        </div>
+        <div class="form-group" style="flex:1; min-width:120px; margin:0;">
+            <label>Origin</label>
+            <input type="text" id="new-origin" list="origin-suggestions" placeholder="e.g. Colombia">
+            <datalist id="origin-suggestions"></datalist>
+        </div>
+        <div class="form-group" style="flex:1; min-width:120px; margin:0;">
+            <label>Process</label>
+            <input type="text" id="new-process" placeholder="e.g. Washed">
+        </div>
+        <div class="form-group" style="flex:2; min-width:180px; margin:0;">
+            <label>Flavor Notes</label>
+            <input type="text" id="new-notes" placeholder="Peach, Chocolate, …">
+        </div>
+        <button class="btn btn-primary" style="margin-bottom:0;" onclick="addCoffee()">Add</button>
+    </div>
+    <p id="add-msg" style="margin:0.5rem 0 0; font-size:0.85rem; color:#888;"></p>
+</div>
+
+<div class="card">
+    <h2 style="margin-top:0;">What You Actually Like</h2>
+    <p style="color:#888; font-size:0.85rem; margin:-0.25rem 0 1rem;">
+        Average tier per group, best first — not how many you've had. Faded bars rest on a
+        single coffee, which isn't a preference yet.
+    </p>
+    <div id="charts-empty" style="color:#888; padding:1rem 0;" hidden>
+        Rank a few coffees above and the charts will fill in.
+    </div>
+    <div id="charts-wrap">
+        <h3 style="margin:0 0 0.5rem;">By Origin</h3>
+        <div style="height:260px;"><canvas id="originChart"></canvas></div>
+        <h3 style="margin:1.5rem 0 0.5rem;">By Flavor Note</h3>
+        <div style="height:260px;"><canvas id="noteChart"></canvas></div>
+        <h3 style="margin:1.5rem 0 0.5rem;">By Roaster</h3>
+        <div style="height:260px;"><canvas id="roasterTierChart"></canvas></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/chart.umd.min.js"></script>
+<style>
+    .tier-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); }
+    .tier-row:last-child { border-bottom: none; }
+    .tier-label {
+        width: 74px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 1.35rem; color: #2b2b2b;
+    }
+    .tier-drop {
+        flex: 1; min-height: 74px; padding: 0.5rem;
+        display: flex; gap: 0.5rem; flex-wrap: wrap; align-content: flex-start;
+    }
+    .tier-drop.over { background: rgba(0, 0, 0, 0.06); }
+    .chip {
+        display: flex; align-items: center; gap: 0.4rem;
+        background: var(--bg, #fff); border: 1px solid var(--border); border-radius: 6px;
+        padding: 0.35rem 0.5rem; cursor: grab; max-width: 260px;
+    }
+    .chip:active { cursor: grabbing; }
+    .chip-name { font-size: 0.85rem; font-weight: 600; line-height: 1.15; }
+    .chip-sub { font-size: 0.72rem; color: var(--text-muted, #888); }
+    .chip select { font-size: 0.72rem; padding: 0.1rem; width: auto; }
+</style>
+<script>
+const TIER_COLORS = {
+    S: '#ff7f7f', A: '#ffbf7f', B: '#ffdf80', C: '#ffff7f',
+    D: '#bfff7f', E: '#7fff7f', F: '#7fffff',
+};
+const TIERS = Object.keys(TIER_COLORS);
+let board = { tiers: [], unranked: [] };
+let charts = {};
+
+function esc(s) {
+    return (s ?? '').replace(/[&<>"']/g, ch => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+    ));
+}
+
+async function loadBoard() {
+    const resp = await fetch('/api/v1/tiers/board');
+    if (!resp.ok) return;
+    board = await resp.json();
+    render();
+    loadCharts();
+}
+
+function chipHtml(c) {
+    const sub = [c.roaster, c.bean_origin].filter(Boolean).join(' · ');
+    const options = ['<option value="">—</option>']
+        .concat(TIERS.map(t => `<option value="${t}" ${c.tier === t ? 'selected' : ''}>${t}</option>`))
+        .join('');
+    return `
+        <div class="chip" draggable="true" data-key="${esc(c.coffee_key)}"
+             ondragstart="onDragStart(event, '${esc(c.coffee_key)}')" title="${esc(c.bean_name)}">
+            <div style="min-width:0;">
+                <div class="chip-name">${esc(c.bean_name)}</div>
+                ${sub ? `<div class="chip-sub">${esc(sub)}</div>` : ''}
+            </div>
+            <select onchange="place('${esc(c.coffee_key)}', this.value)"
+                    title="Set tier without dragging">${options}</select>
+        </div>`;
+}
+
+function render() {
+    document.getElementById('tier-board').innerHTML = board.tiers.map(row => `
+        <div class="tier-row">
+            <div class="tier-label" style="background:${TIER_COLORS[row.tier]};">${row.tier}</div>
+            <div class="tier-drop" data-tier="${row.tier}"
+                 ondragover="onDragOver(event)" ondragleave="onDragLeave(event)"
+                 ondrop="onDrop(event, '${row.tier}')">
+                ${row.entries.map(chipHtml).join('')}
+            </div>
+        </div>`).join('');
+
+    const tray = document.getElementById('unranked-row');
+    tray.innerHTML = board.unranked.map(chipHtml).join('')
+        || '<span style="color:#888; font-size:0.85rem;">Everything is ranked.</span>';
+    tray.setAttribute('ondragover', 'onDragOver(event)');
+    tray.setAttribute('ondrop', 'onDrop(event, "")');
+    document.getElementById('unranked-count').textContent =
+        board.unranked.length ? `(${board.unranked.length})` : '';
+}
+
+function onDragStart(event, key) {
+    event.dataTransfer.setData('text/plain', key);
+    event.dataTransfer.effectAllowed = 'move';
+}
+
+function onDragOver(event) {
+    event.preventDefault();
+    event.currentTarget.classList.add('over');
+}
+
+function onDragLeave(event) {
+    event.currentTarget.classList.remove('over');
+}
+
+function onDrop(event, tier) {
+    event.preventDefault();
+    event.currentTarget.classList.remove('over');
+    const key = event.dataTransfer.getData('text/plain');
+    if (key) place(key, tier);
+}
+
+async function place(key, tier) {
+    const resp = await fetch('/api/v1/tiers/place', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coffee_key: key, tier: tier || null }),
+    });
+    if (!resp.ok) { alert('Could not move that coffee.'); return; }
+    board = await resp.json();
+    render();
+    loadCharts();
+}
+
+async function addCoffee() {
+    const msg = document.getElementById('add-msg');
+    const bean = document.getElementById('new-bean').value.trim();
+    msg.style.color = '#888';
+    if (!bean) { msg.style.color = '#f44336'; msg.textContent = 'Give the coffee a name.'; return; }
+    const resp = await fetch('/api/v1/tiers/entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            bean_name: bean,
+            roaster: document.getElementById('new-roaster').value.trim() || null,
+            bean_origin: document.getElementById('new-origin').value.trim() || null,
+            bean_process: document.getElementById('new-process').value.trim() || null,
+            flavor_notes: document.getElementById('new-notes').value.trim() || null,
+        }),
+    });
+    if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        msg.style.color = '#f44336';
+        msg.textContent = err.detail || 'Could not add that coffee.';
+        return;
+    }
+    ['new-bean', 'new-roaster', 'new-origin', 'new-process', 'new-notes']
+        .forEach(id => { document.getElementById(id).value = ''; });
+    msg.textContent = 'Added to Unranked.';
+    setTimeout(() => { msg.textContent = ''; }, 2000);
+    loadBoard();
+}
+
+// Average tier, drawn as tier letters — a bar at 6.5 should read "A", not "6.5".
+function tierAxis() {
+    return {
+        beginAtZero: true, min: 0, max: TIERS.length,
+        ticks: {
+            stepSize: 1,
+            callback: v => (v >= 1 && v <= TIERS.length ? TIERS[TIERS.length - v] : ''),
+        },
+        title: { display: true, text: 'Average tier' },
+    };
+}
+
+function drawChart(canvasId, rows) {
+    charts[canvasId]?.destroy();
+    charts[canvasId] = new Chart(document.getElementById(canvasId), {
+        type: 'bar',
+        data: {
+            labels: rows.map(r => r.label),
+            datasets: [{
+                label: 'Average tier',
+                data: rows.map(r => r.avg_tier),
+                // A single coffee isn't evidence, so those bars are faded.
+                backgroundColor: rows.map(r =>
+                    TIER_COLORS[r.avg_tier_letter] + (r.thin ? '55' : 'ff')),
+                borderColor: '#00000022',
+                borderWidth: 1,
+            }],
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => {
+                            const r = rows[ctx.dataIndex];
+                            const who = r.coffees.map(c => `${c.tier} ${c.bean_name}`).join(', ');
+                            return [`${r.avg_tier_letter} tier (${r.avg_tier})`,
+                                    `${r.count} coffee${r.count === 1 ? '' : 's'}: ${who}`];
+                        },
+                    },
+                },
+            },
+            scales: { y: tierAxis() },
+        },
+    });
+}
+
+async function loadCharts() {
+    const groups = [['bean_origin', 'originChart'], ['flavor_note', 'noteChart'],
+                    ['roaster', 'roasterTierChart']];
+    let anyData = false;
+    for (const [groupBy, canvasId] of groups) {
+        const resp = await fetch(`/api/v1/tiers/analytics?group_by=${groupBy}`);
+        if (!resp.ok) continue;
+        const rows = await resp.json();
+        if (rows.length) anyData = true;
+        drawChart(canvasId, rows);
+    }
+    document.getElementById('charts-empty').hidden = anyData;
+    document.getElementById('charts-wrap').hidden = !anyData;
+}
+
+function populateSuggestions() {
+    const all = board.tiers.flatMap(t => t.entries).concat(board.unranked);
+    const fill = (id, field) => {
+        const values = [...new Set(all.map(c => c[field]).filter(Boolean))].sort();
+        document.getElementById(id).innerHTML =
+            values.map(v => `<option value="${esc(v)}">`).join('');
+    };
+    fill('roaster-suggestions', 'roaster');
+    fill('origin-suggestions', 'bean_origin');
+}
+
+loadBoard().then(populateSuggestions);
+</script>
+{% endblock %}
