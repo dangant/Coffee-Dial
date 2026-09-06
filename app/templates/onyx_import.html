@@ -70,10 +70,12 @@
     <h3 style="margin:1.25rem 0 0.5rem;">Add to shelf</h3>
     <div id="size-buttons" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;"></div>
     <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
-        <div class="form-group" style="margin:0; width:140px;"><label>Grams</label><input type="number" step="0.1" id="s-grams" placeholder="optional"></div>
-        <div class="form-group" style="margin:0; width:140px;"><label>Price ($)</label><input type="number" step="0.01" id="s-price" placeholder="optional"></div>
+        <div class="form-group" style="margin:0; width:140px;"><label>Grams (per bag)</label><input type="number" step="any" id="s-grams" placeholder="optional" oninput="updateTotal()"></div>
+        <div class="form-group" style="margin:0; width:140px;"><label>Price / bag ($)</label><input type="number" step="0.01" id="s-price" placeholder="optional" oninput="updateTotal()"></div>
+        <div class="form-group" style="margin:0; width:110px;"><label>Quantity</label><input type="number" min="1" step="1" value="1" id="s-qty" oninput="updateTotal()"></div>
     </div>
-    <p style="font-size:0.8rem; color:#888; margin:0.5rem 0 0;">Leave grams blank to create the templates without stocking the shelf.</p>
+    <p id="s-total" style="font-size:0.9rem; color:#888; margin:0.5rem 0 0;"></p>
+    <p style="font-size:0.8rem; color:#888; margin:0.25rem 0 0;">Leave grams blank to create the templates without stocking the shelf.</p>
 
     <div style="margin-top:1.5rem; display:flex; gap:0.75rem; align-items:center;">
         <button class="btn btn-primary" id="create-btn" onclick="commit()">Create 2 templates + add to shelf</button>
@@ -85,6 +87,7 @@
 {% block scripts %}
 <script>
 let parsed = null;
+let selectedSize = null;
 
 function val(id) { const el = document.getElementById(id); const v = el.value.trim(); return v === '' ? null : v; }
 function num(id) { const v = val(id); return v === null ? null : parseFloat(v); }
@@ -139,11 +142,32 @@ function fillPreview(d) {
     (d.sizes || []).forEach(sz => {
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'btn btn-outline btn-sm';
+        const units = sz.units || 1;
         const g = sz.grams ? `${sz.grams}g` : sz.label;
-        b.textContent = `${sz.label} — ${g}${sz.price ? ' ($' + sz.price.toFixed(2) + ')' : ''}`;
-        b.onclick = () => { set('s-grams', sz.grams); set('s-price', sz.price); highlight(b); };
+        // Case packs price per bag, so label them as such to explain the prefilled quantity.
+        const price = sz.price ? ` ($${sz.price.toFixed(2)}${units > 1 ? '/bag' : ''})` : '';
+        b.textContent = `${sz.label} — ${g}${price}`;
+        b.onclick = () => {
+            set('s-grams', sz.grams); set('s-price', sz.price); set('s-qty', units);
+            selectedSize = sz.label;
+            highlight(b); updateTotal();
+        };
         wrap.appendChild(b);
     });
+    set('s-qty', 1);
+    selectedSize = null;
+    updateTotal();
+}
+
+function updateTotal() {
+    const el = document.getElementById('s-total');
+    const grams = num('s-grams'), price = num('s-price');
+    const qty = parseInt(document.getElementById('s-qty').value, 10) || 1;
+    if (!grams || grams <= 0) { el.textContent = ''; return; }
+    const parts = [`${(grams * qty).toFixed(1)} g`];
+    if (price) parts.push(`$${(price * qty).toFixed(2)}`);
+    const what = selectedSize ? `  (${qty} × ${selectedSize})` : (qty > 1 ? `  (${qty} bags)` : '');
+    el.textContent = `Total: ${parts.join(' · ')}${what}`;
 }
 
 function highlight(active) {
@@ -174,6 +198,7 @@ async function commit() {
         },
         grams: num('s-grams'),
         price: num('s-price'),
+        quantity: parseInt(document.getElementById('s-qty').value, 10) || 1,
     };
     try {
         const resp = await fetch('/api/v1/import/onyx/commit', {

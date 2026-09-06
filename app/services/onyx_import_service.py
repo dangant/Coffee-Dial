@@ -83,16 +83,33 @@ def _grams_for_label(label: str) -> float | None:
     return round(qty, 1)
 
 
+def _units_for_label(label: str) -> int:
+    """Bags per variant. Onyx sells case packs as "10oz Case Pack (6)"."""
+    m = re.search(r"\((\d+)\)|(\d+)\s*-?\s*pack\b", label, re.I)
+    if not m:
+        return 1
+    count = int(m.group(1) or m.group(2))
+    return count if count > 0 else 1
+
+
 def _sizes_from_js(js: dict) -> list[dict]:
+    """Sizes normalized to a single bag: grams and price are both per-bag.
+
+    ``_grams_for_label`` already reads the leading "10oz" of a case-pack label, but
+    Shopify's price covers the whole case — divide it by the pack count so the two
+    numbers describe the same thing and quantity is the only multiplier.
+    """
     sizes = []
     for v in js.get("variants") or []:
         label = (v.get("title") or v.get("option1") or "").strip()
         if not label:
             continue
+        units = _units_for_label(label)
         sizes.append({
             "label": label,
             "grams": _grams_for_label(label),
-            "price": round((v.get("price") or 0) / 100.0, 2),
+            "price": round((v.get("price") or 0) / 100.0 / units, 2),
+            "units": units,
         })
     return sizes
 
@@ -344,14 +361,22 @@ def commit_import(db: Session, data: dict) -> dict:
     shelf = None
     grams = data.get("grams")
     if grams and float(grams) > 0:
+        # grams/price arrive per bag; quantity is how many bags were bought.
+        quantity = int(data.get("quantity") or 1)
         price = data.get("price")
+        total_grams = round(float(grams) * quantity, 2)
+        total_price = round(float(price) * quantity, 2) if price not in (None, "") else None
         inv = inventory_service.restock_inventory(
             db,
             bean_name=(data.get("bean_name") or data.get("product_name") or "").strip(),
             roaster=(data.get("roaster") or ROASTER).strip(),
-            add_grams=float(grams),
-            price=float(price) if price not in (None, "") else None,
+            add_grams=total_grams,
+            price=total_price,
         )
-        shelf = {"bean_name": inv.bean_name, "added_grams": float(grams)}
+        shelf = {
+            "bean_name": inv.bean_name,
+            "added_grams": total_grams,
+            "quantity": quantity,
+        }
 
     return {"templates": created, "shelf": shelf}

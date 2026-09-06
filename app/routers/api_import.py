@@ -27,6 +27,8 @@ class CommitRequest(BaseModel):
     pour_over: dict[str, Any] = {}
     grams: Optional[float] = None
     price: Optional[float] = None
+    # grams/price are per bag; quantity is how many bags were bought.
+    quantity: int = 1
 
 
 @router.post("/onyx/preview")
@@ -45,6 +47,8 @@ def commit_onyx(body: CommitRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Grams must be non-negative.")
     if body.price is not None and body.price < 0:
         raise HTTPException(status_code=400, detail="Price must be non-negative.")
+    if body.quantity < 1:
+        raise HTTPException(status_code=400, detail="Quantity must be at least 1.")
     try:
         return onyx_import_service.commit_import(db, body.model_dump())
     except OnyxImportError as e:
