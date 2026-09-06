@@ -15,6 +15,15 @@ class BrewTemplate(Base):
     bean_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     bean_origin: Mapped[str | None] = mapped_column(String(200), nullable=True)
     bean_process: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # The rest of Onyx's attribute wheel — everything the product page states about
+    # the coffee itself, as opposed to how it is brewed.
+    bean_variety: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    drying_method: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    harvest_season: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    production_roaster: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    preferred_extraction: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    caffeine_mg: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    coffee_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     roast_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     roast_level: Mapped[str | None] = mapped_column(String(50), nullable=True)
     flavor_notes_expected: Mapped[str | None] = mapped_column(Text, nullable=True)

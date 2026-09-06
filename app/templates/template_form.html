@@ -29,12 +29,49 @@
             </div>
             <div class="form-group">
                 <label>Process</label>
-                <select name="bean_process">
-                    <option value="">—</option>
-                    {% for p in ["Washed", "Natural", "Honey", "Anaerobic", "Co-ferment", "Wet-Hulled", "Other"] %}
-                    <option value="{{ p }}" {{ 'selected' if template and template.bean_process == p else '' }}>{{ p }}</option>
+                {# A datalist, not a select: roasters invent process names ("Thermal-Shock"),
+                   and a fixed list silently rendered any unlisted stored value as blank. #}
+                <input type="text" name="bean_process" list="process-options"
+                       value="{{ template.bean_process or '' if template else '' }}">
+                <datalist id="process-options">
+                    {% for p in ["Washed", "Natural", "Honey", "Anaerobic", "Co-ferment", "Wet-Hulled", "Thermal-Shock", "Other"] %}
+                    <option value="{{ p }}">
                     {% endfor %}
-                </select>
+                </datalist>
+            </div>
+            <div class="form-group">
+                <label>Variety</label>
+                <input type="text" name="bean_variety" placeholder="e.g. Catuai"
+                       value="{{ template.bean_variety or '' if template else '' }}">
+            </div>
+            <div class="form-group">
+                <label>Drying Method</label>
+                <input type="text" name="drying_method" placeholder="e.g. Raised-Bed Dried"
+                       value="{{ template.drying_method or '' if template else '' }}">
+            </div>
+            <div class="form-group">
+                <label>Harvest Season</label>
+                <input type="text" name="harvest_season" placeholder="e.g. December"
+                       value="{{ template.harvest_season or '' if template else '' }}">
+            </div>
+            <div class="form-group">
+                <label>Production Roaster</label>
+                <input type="text" name="production_roaster" placeholder="e.g. Diedrich CR-35"
+                       value="{{ template.production_roaster or '' if template else '' }}">
+            </div>
+            <div class="form-group">
+                <label>Preferred Extraction</label>
+                <input type="text" name="preferred_extraction" placeholder="e.g. Filter &amp; Espresso"
+                       value="{{ template.preferred_extraction or '' if template else '' }}">
+            </div>
+            <div class="form-group">
+                <label>Caffeine</label>
+                <input type="text" name="caffeine_mg" placeholder="e.g. 215mg"
+                       value="{{ template.caffeine_mg or '' if template else '' }}">
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+                <label>Coffee Summary</label>
+                <textarea name="coffee_summary" rows="3">{{ template.coffee_summary or '' if template else '' }}</textarea>
             </div>
             <div class="form-group">
                 <label>Roast Date</label>

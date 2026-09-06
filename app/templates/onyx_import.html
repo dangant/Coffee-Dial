@@ -46,6 +46,20 @@
             <input type="text" id="f-process">
         </div>
     </div>
+    <h3 style="margin:1.25rem 0 0.5rem;">Coffee attributes</h3>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:0.75rem;">
+        <div class="form-group" style="margin:0;"><label>Variety</label><input type="text" id="f-variety"></div>
+        <div class="form-group" style="margin:0;"><label>Drying method</label><input type="text" id="f-drying"></div>
+        <div class="form-group" style="margin:0;"><label>Harvest season</label><input type="text" id="f-harvest"></div>
+        <div class="form-group" style="margin:0;"><label>Production roaster</label><input type="text" id="f-prodroaster"></div>
+        <div class="form-group" style="margin:0;"><label>Roast level</label><input type="text" id="f-roastlevel"></div>
+        <div class="form-group" style="margin:0;"><label>Preferred extraction</label><input type="text" id="f-extraction"></div>
+        <div class="form-group" style="margin:0;"><label>Caffeine</label><input type="text" id="f-caffeine"></div>
+    </div>
+    <div class="form-group" style="margin:0.75rem 0 0;">
+        <label>Coffee summary</label>
+        <textarea id="f-summary" rows="3"></textarea>
+    </div>
     <div class="form-group" style="margin:0.75rem 0 0;">
         <label>Flavor notes (comma-separated)</label>
         <input type="text" id="f-notes" placeholder="Pomegranate, Lychee, …">
@@ -125,6 +139,10 @@ function fillPreview(d) {
     set('f-origin', d.bean_origin);
     set('f-process', d.bean_process);
     set('f-notes', (d.flavor_notes || []).join(', '));
+    set('f-variety', d.bean_variety); set('f-drying', d.drying_method);
+    set('f-harvest', d.harvest_season); set('f-prodroaster', d.production_roaster);
+    set('f-roastlevel', d.roast_level); set('f-extraction', d.preferred_extraction);
+    set('f-caffeine', d.caffeine_mg); set('f-summary', d.coffee_summary);
     const e = d.espresso || {};
     set('e-dose', e.dose_g); set('e-yield', e.yield_g); set('e-time', e.time_s);
     const p = d.pour_over || {};
@@ -188,6 +206,14 @@ async function commit() {
         roaster: val('f-roaster'),
         bean_origin: val('f-origin'),
         bean_process: val('f-process'),
+        bean_variety: val('f-variety'),
+        drying_method: val('f-drying'),
+        harvest_season: val('f-harvest'),
+        production_roaster: val('f-prodroaster'),
+        roast_level: val('f-roastlevel'),
+        preferred_extraction: val('f-extraction'),
+        caffeine_mg: val('f-caffeine'),
+        coffee_summary: val('f-summary'),
         flavor_notes: notes,
         espresso: { dose_g: num('e-dose'), yield_g: num('e-yield'), time_s: num('e-time') },
         pour_over: {

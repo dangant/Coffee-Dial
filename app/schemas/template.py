@@ -9,6 +9,13 @@ class TemplateBase(BaseModel):
     bean_name: str | None = None
     bean_origin: str | None = None
     bean_process: str | None = None
+    bean_variety: str | None = None
+    drying_method: str | None = None
+    harvest_season: str | None = None
+    production_roaster: str | None = None
+    preferred_extraction: str | None = None
+    caffeine_mg: str | None = None
+    coffee_summary: str | None = None
     roast_date: date | None = None
     roast_level: str | None = None
     flavor_notes_expected: str | None = None
@@ -49,6 +56,13 @@ class TemplateUpdate(BaseModel):
     bean_name: str | None = None
     bean_origin: str | None = None
     bean_process: str | None = None
+    bean_variety: str | None = None
+    drying_method: str | None = None
+    harvest_season: str | None = None
+    production_roaster: str | None = None
+    preferred_extraction: str | None = None
+    caffeine_mg: str | None = None
+    coffee_summary: str | None = None
     roast_date: date | None = None
     roast_level: str | None = None
     flavor_notes_expected: str | None = None

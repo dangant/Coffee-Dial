@@ -22,6 +22,15 @@ class CommitRequest(BaseModel):
     roaster: Optional[str] = None
     bean_origin: Optional[str] = None
     bean_process: Optional[str] = None
+    # Onyx attribute wheel — editable in the preview before the templates are created.
+    bean_variety: Optional[str] = None
+    drying_method: Optional[str] = None
+    harvest_season: Optional[str] = None
+    production_roaster: Optional[str] = None
+    preferred_extraction: Optional[str] = None
+    roast_level: Optional[str] = None
+    caffeine_mg: Optional[str] = None
+    coffee_summary: Optional[str] = None
     flavor_notes: list[str] = []
     espresso: dict[str, Any] = {}
     pour_over: dict[str, Any] = {}

@@ -118,3 +118,110 @@ def test_api_commit_with_quantity(client, db):
     )
     assert resp.status_code == 200
     assert resp.json()["shelf"]["added_grams"] == 113.4
+
+
+# --- Onyx attribute wheel ------------------------------------------------
+
+
+def _wheel_html(stats, abstract="A long coffee summary paragraph " * 4):
+    """A cut-down copy of Onyx's wheel markup: keyed .a-stat entries plus the prose."""
+    entries = "".join(
+        f'<div class="a-stat" data-stat-id="{key}"><span class="stat-text"><p>'
+        f'{value}<br><label>{key.upper()}</label></p></span></div>'
+        for key, value in stats.items()
+    )
+    return (
+        f'<div class="hero-intro"><div class="stage">'
+        f'<div class="left-col stat-col">{entries}</div>'
+        f'<div class="desktop-only"><p>{abstract}</p></div>'
+        f"</div></div>"
+    )
+
+
+def _soup(html):
+    from bs4 import BeautifulSoup
+
+    return BeautifulSoup(html, "html.parser")
+
+
+def test_wheel_stats_are_keyed_not_label_matched():
+    from app.services.onyx_import_service import _wheel_stats
+
+    stats = _wheel_stats(_soup(_wheel_html({
+        "variety": "Catuai", "drying": "Raised-Bed Dried", "harvest": "December",
+        "roaster": "Diedrich CR-35", "extraction": "Filter &amp; Espresso",
+        "agtron": "Light Agtron #129",
+    })))
+
+    assert stats["bean_variety"] == "Catuai"
+    assert stats["drying_method"] == "Raised-Bed Dried"
+    assert stats["harvest_season"] == "December"
+    assert stats["production_roaster"] == "Diedrich CR-35"
+    assert stats["preferred_extraction"] == "Filter & Espresso"
+    assert stats["roast_level"] == "Light Agtron #129"
+
+
+def test_the_caption_is_not_mistaken_for_the_value():
+    from app.services.onyx_import_service import _wheel_stats
+
+    stats = _wheel_stats(_soup(_wheel_html({"variety": "Catuai"})))
+
+    assert "VARIETY" not in (stats["bean_variety"] or "")
+
+
+def test_coffee_summary_comes_from_the_centre_panel():
+    from app.services.onyx_import_service import _wheel_stats
+
+    stats = _wheel_stats(_soup(_wheel_html({"variety": "Catuai"}, abstract="x" * 200)))
+
+    assert stats["coffee_summary"] == "x" * 200
+
+
+def test_onyx_inventory_is_not_stored():
+    """1289 LBS is Onyx's warehouse stock, stale the moment it is written down."""
+    from app.services.onyx_import_service import _wheel_stats
+
+    stats = _wheel_stats(_soup(_wheel_html({"inventory": "1289 LBS", "variety": "Catuai"})))
+
+    assert "1289 LBS" not in str(stats.values())
+
+
+def test_a_page_without_the_wheel_degrades_to_none():
+    """A redesign must leave the import usable, not raise."""
+    from app.services.onyx_import_service import _wheel_stats
+
+    stats = _wheel_stats(_soup("<html><body><h1>Nothing here</h1></body></html>"))
+
+    assert stats["bean_variety"] is None
+    assert stats["coffee_summary"] is None
+
+
+def test_attributes_land_on_both_templates():
+    from app.services.onyx_import_service import build_templates
+
+    espresso, pour_over = build_templates(_payload(
+        bean_variety="Catuai", drying_method="Raised-Bed Dried",
+        harvest_season="December", production_roaster="Diedrich CR-35",
+        roast_level="Light Agtron #129", preferred_extraction="Filter & Espresso",
+        coffee_summary="About this coffee.",
+    ))
+
+    for tpl in (espresso, pour_over):
+        assert tpl.bean_variety == "Catuai"
+        assert tpl.drying_method == "Raised-Bed Dried"
+        assert tpl.harvest_season == "December"
+        assert tpl.production_roaster == "Diedrich CR-35"
+        assert tpl.roast_level == "Light Agtron #129"
+        assert tpl.coffee_summary == "About this coffee."
+
+
+def test_attributes_are_persisted_by_the_commit(db):
+    from app.models.template import BrewTemplate
+    from app.services.onyx_import_service import commit_import
+
+    commit_import(db, _payload(bean_variety="Catuai", drying_method="Raised-Bed Dried"))
+
+    rows = db.query(BrewTemplate).all()
+    assert len(rows) == 2
+    assert all(r.bean_variety == "Catuai" for r in rows)
+    assert all(r.drying_method == "Raised-Bed Dried" for r in rows)

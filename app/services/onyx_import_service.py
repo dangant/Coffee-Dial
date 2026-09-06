@@ -153,6 +153,49 @@ def _parse_pour_over(guide_text: str, steps: list[dict], html: str) -> dict:
     }
 
 
+# Onyx's product page draws an "attribute wheel" whose entries carry a stable
+# data-stat-id, so the values are keyed rather than matched on their visible labels.
+# "inventory" is deliberately absent: it is Onyx's warehouse stock on the day of the
+# import, not a property of the bag, and it is stale the moment it is stored.
+_WHEEL_FIELDS = {
+    "variety": "bean_variety",
+    "drying": "drying_method",
+    "harvest": "harvest_season",
+    "roaster": "production_roaster",
+    "extraction": "preferred_extraction",
+    "agtron": "roast_level",
+    "caffeine": "caffeine_mg",
+}
+
+
+def _wheel_stats(soup: BeautifulSoup) -> dict:
+    """Read the attribute wheel into template fields, best-effort like everything here."""
+    out = {field: None for field in _WHEEL_FIELDS.values()}
+    for stat in soup.select("div.stat-col .a-stat"):
+        field = _WHEEL_FIELDS.get(stat.get("data-stat-id") or "")
+        if not field:
+            continue
+        para = stat.find("p")
+        if not para:
+            continue
+        # The <label> is the caption ("VARIETY"); the value is the text beside it.
+        label = para.find("label")
+        if label:
+            label.extract()
+        value = re.sub(r"\s+", " ", para.get_text(" ", strip=True)).strip()
+        out[field] = value or None
+
+    # The wheel's abstract entry only reads "Coffee Summary" — the prose is in the
+    # centre panel, so it needs its own selector.
+    paragraphs = [
+        re.sub(r"\s+", " ", p.get_text(" ", strip=True))
+        for p in soup.select(".hero-intro .desktop-only p")
+    ]
+    long_form = [p for p in paragraphs if len(p) > 80]
+    out["coffee_summary"] = max(long_form, key=len) if long_form else None
+    return out
+
+
 def _parse_espresso(guide_text: str) -> dict:
     return {
         "dose_g": _num(r"Coffee:\s*([\d.]+)\s*g", guide_text),
@@ -214,6 +257,7 @@ def parse_onyx(url: str) -> dict:
         "sizes": _sizes_from_js(js),
         "espresso": espresso,
         "pour_over": pour_over,
+        **_wheel_stats(soup),
     }
 
 
@@ -303,6 +347,9 @@ def build_templates(data: dict) -> tuple[TemplateCreate, TemplateCreate]:
         bean_process=data.get("bean_process") or None,
         flavor_notes_expected=notes_str,
         product_url=_product_url(data.get("url")),
+        # The attribute wheel describes the coffee, so both recipes carry it.
+        **{field: data.get(field) or None for field in _WHEEL_FIELDS.values()},
+        coffee_summary=data.get("coffee_summary") or None,
     )
 
     esp = data.get("espresso") or {}
