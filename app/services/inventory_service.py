@@ -115,6 +115,12 @@ def list_shelf(db: Session) -> list[dict]:
                 "roaster": inv.roaster,
                 "initial_grams": inv.initial_amount_grams,
                 "price": inv.price,
+                # Blended cost across every bag stocked, so the page can price a dose.
+                "price_per_gram": (
+                    inv.price / inv.initial_amount_grams
+                    if inv.price and inv.initial_amount_grams
+                    else None
+                ),
                 "used_grams": round(used, 1),
                 "remaining_grams": round(remaining, 1),
                 "tracked": True,
@@ -131,6 +137,7 @@ def list_shelf(db: Session) -> list[dict]:
                     "roaster": roaster,
                     "initial_grams": None,
                     "price": None,
+                    "price_per_gram": None,
                     "used_grams": round(used, 1),
                     "remaining_grams": None,
                     "tracked": False,

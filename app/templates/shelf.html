@@ -44,7 +44,19 @@
 
 <!-- Tracked beans -->
 <div class="card" id="tracked-card">
-    <h2 style="margin-top:0;">Tracked Beans</h2>
+    <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:center; justify-content:space-between;">
+        <h2 style="margin:0;">Tracked Beans</h2>
+        <div style="display:flex; gap:0.5rem; align-items:center; font-size:0.85rem;">
+            <span style="color:var(--text-muted, #888);">Cost per</span>
+            <select id="cost-method" onchange="onCostMethodChange()" style="width:auto;">
+                <option value="pour_over">Pour Over</option>
+                <option value="espresso">Espresso</option>
+            </select>
+            <input type="number" id="cost-dose" min="1" step="1" value="25"
+                   style="width:70px;" onchange="onCostDoseChange()" title="Grams in one cup">
+            <span style="color:var(--text-muted, #888);">g</span>
+        </div>
+    </div>
     <table class="brew-table" id="tracked-table">
         <thead>
             <tr>
@@ -80,6 +92,47 @@
 <script>
 let shelfData = [];
 let templates = [];
+
+// A cup is a dose of beans, so price the shelf that way rather than per 100g.
+// Defaults match POUR_OVER_GRAMS / ESPRESSO_GRAMS in inventory_service.py and the LP chart.
+const DEFAULT_DOSES = { pour_over: 25, espresso: 18 };
+
+function store(key, value) {
+    try { localStorage.setItem(key, value); } catch (e) { /* private mode — not worth failing over */ }
+}
+
+function stored(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+
+function costMethod() {
+    return document.getElementById('cost-method').value;
+}
+
+function costDose() {
+    return parseFloat(document.getElementById('cost-dose').value) || DEFAULT_DOSES[costMethod()];
+}
+
+function initCostControls() {
+    const method = stored('shelfCostMethod') || 'pour_over';
+    document.getElementById('cost-method').value = method;
+    document.getElementById('cost-dose').value =
+        stored(`shelfCostDose_${method}`) || DEFAULT_DOSES[method];
+}
+
+function onCostMethodChange() {
+    const method = costMethod();
+    store('shelfCostMethod', method);
+    // Each method remembers its own dose, so switching back restores what you set.
+    document.getElementById('cost-dose').value =
+        stored(`shelfCostDose_${method}`) || DEFAULT_DOSES[method];
+    renderTracked();
+}
+
+function onCostDoseChange() {
+    store(`shelfCostDose_${costMethod()}`, costDose());
+    renderTracked();
+}
 
 async function loadShelf() {
     const resp = await fetch('/api/v1/shelf');
@@ -162,7 +215,7 @@ function renderTracked() {
                         placeholder="$"
                         style="width:80px;"
                         onkeydown="if(event.key==='Enter') updateEntry(${r.id}, '${esc(r.bean_name)}', '${esc(r.roaster || '')}')">
-                    ${r.price != null && r.initial_grams > 0 ? `<span style="font-size:0.75rem; color:#888;">$${(r.price / r.initial_grams * 100).toFixed(2)}/100g</span>` : ''}
+                    ${r.price_per_gram != null ? `<span style="font-size:0.75rem; color:#888;">$${(r.price_per_gram * costDose()).toFixed(2)}/cup · ${costDose()}g</span>` : ''}
                 </div>
             </td>
             <td>${r.used_grams}g</td>
@@ -256,6 +309,7 @@ async function removeEntry(id) {
 
 function esc(s) { return (s || '').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
 
+initCostControls();
 loadShelf();
 loadTemplates();
 </script>
