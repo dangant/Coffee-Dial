@@ -16,6 +16,7 @@ from app.models.template import BrewTemplate
 from app.models.inventory import BeanInventory
 from app.models.idea import Idea
 from app.models.idea_screenshot import IdeaScreenshot
+from app.models.tier_entry import TierEntry
 from app.models.lookups import FlavorNote, BrewDevice, Grinder, BrewMethod
 from app.services import roaster_service
 
@@ -52,6 +53,7 @@ def export_all(db: Session = Depends(get_db)):
         _row_to_dict(i, exclude=("_sa_instance_state", "screenshots"))
         for i in db.query(Idea).all()
     ]
+    tier_entries = [_row_to_dict(t) for t in db.query(TierEntry).all()]
 
     payload = {
         "version": EXPORT_VERSION,
@@ -65,6 +67,7 @@ def export_all(db: Session = Depends(get_db)):
         "brew_methods": brew_methods,
         "grinders": grinders,
         "ideas": ideas,
+        "tier_entries": tier_entries,
     }
 
     buf = BytesIO(json.dumps(payload, indent=2).encode())
@@ -105,6 +108,9 @@ def import_all(file: UploadFile = File(...), db: Session = Depends(get_db)):
     # Clear existing user data (order matters for foreign keys)
     db.query(Rating).delete()
     db.query(Brew).delete()
+    # Before templates: tier entries carry a template_id foreign key.
+    if "tier_entries" in data:
+        db.query(TierEntry).delete()
     db.query(BrewTemplate).delete()
     db.query(BeanInventory).delete()
     db.query(FlavorNote).delete()
@@ -272,6 +278,26 @@ def import_all(file: UploadFile = File(...), db: Session = Depends(get_db)):
             updated_at=_parse_datetime(i.get("updated_at")),
         ))
     counts["ideas"] = len(data.get("ideas", []))
+
+    # --- Tier board ---
+    for t in data.get("tier_entries", []):
+        db.add(TierEntry(
+            id=t["id"],
+            coffee_key=t["coffee_key"],
+            bean_name=t["bean_name"],
+            roaster=t.get("roaster"),
+            bean_origin=t.get("bean_origin"),
+            bean_process=t.get("bean_process"),
+            flavor_notes=t.get("flavor_notes"),
+            template_id=t.get("template_id"),
+            source=t.get("source", "manual"),
+            tier=t.get("tier"),
+            position=t.get("position", 0),
+            notes=t.get("notes"),
+            created_at=_parse_datetime(t.get("created_at")),
+            updated_at=_parse_datetime(t.get("updated_at")),
+        ))
+    counts["tier_entries"] = len(data.get("tier_entries", []))
 
     db.commit()
 

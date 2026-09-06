@@ -181,3 +181,43 @@ def test_unknown_coffee_is_404(client):
 
 def test_unknown_grouping_is_rejected(client):
     assert client.get("/api/v1/tiers/analytics?group_by=nonsense").status_code == 400
+
+
+def test_tier_board_survives_a_backup_round_trip(client, db):
+    """Rankings are real work — a backup that loses them isn't a backup."""
+    import json
+
+    _template(client, "India Ratnagiri", origin="India")
+    tier_service.place(db, "india ratnagiri", "S")
+    tier_service.add_manual(db, {"bean_name": "Kenya Nyeri AA", "tier": "B"})
+
+    dump = client.get("/api/v1/data/export").json()
+    assert len(dump["tier_entries"]) == 2
+
+    resp = client.post(
+        "/api/v1/data/import",
+        files={"file": ("backup.json", json.dumps(dump), "application/json")},
+    )
+    assert resp.status_code == 200
+
+    board = client.get("/api/v1/tiers/board").json()
+    placed = {e["bean_name"]: e["tier"] for row in board["tiers"] for e in row["entries"]}
+    assert placed == {"India Ratnagiri": "S", "Kenya Nyeri AA": "B"}
+
+
+def test_restoring_a_pre_tiers_backup_keeps_the_board(client, db):
+    """Backups taken before this feature have no tier_entries key."""
+    import json
+
+    _template(client, "India Ratnagiri")
+    tier_service.place(db, "india ratnagiri", "S")
+    old_backup = {"version": 1, "brews": [], "ratings": [], "brew_templates": []}
+
+    resp = client.post(
+        "/api/v1/data/import",
+        files={"file": ("old.json", json.dumps(old_backup), "application/json")},
+    )
+    assert resp.status_code == 200
+
+    board = client.get("/api/v1/tiers/board").json()
+    assert len(board["tiers"][0]["entries"]) == 1
