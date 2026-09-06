@@ -6,6 +6,7 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -16,6 +17,7 @@ from app.models.inventory import BeanInventory
 from app.models.idea import Idea
 from app.models.idea_screenshot import IdeaScreenshot
 from app.models.lookups import FlavorNote, BrewDevice, Grinder, BrewMethod
+from app.services import roaster_service
 
 router = APIRouter(prefix="/api/v1/data", tags=["data"])
 
@@ -274,3 +276,22 @@ def import_all(file: UploadFile = File(...), db: Session = Depends(get_db)):
     db.commit()
 
     return {"status": "ok", "imported": counts}
+
+
+class RoasterMerge(BaseModel):
+    source: str
+    target: str
+
+
+@router.get("/roasters")
+def list_roasters(db: Session = Depends(get_db)):
+    """Roaster names in use, with counts — duplicates show up as near-identical rows."""
+    return roaster_service.list_roasters(db)
+
+
+@router.post("/roasters/merge")
+def merge_roasters(body: RoasterMerge, db: Session = Depends(get_db)):
+    try:
+        return roaster_service.merge_roasters(db, body.source, body.target)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

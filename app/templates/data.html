@@ -11,6 +11,27 @@
     <a href="/api/v1/data/export" class="btn btn-primary">Download Export</a>
 </section>
 
+<section class="card" style="margin-bottom: 2rem;">
+    <h2>Roasters</h2>
+    <p>
+        The same roaster typed two ways counts as two roasters, which splits it across every
+        chart. Merging rewrites the name on brews, templates, tier entries, and the shelf.
+    </p>
+    <div id="roaster-list" style="margin-bottom: 1rem;"></div>
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
+        <div class="form-group" style="min-width:200px; margin:0;">
+            <label>Merge this roaster</label>
+            <select id="merge-source"></select>
+        </div>
+        <div class="form-group" style="min-width:200px; margin:0;">
+            <label>into this one (the name kept)</label>
+            <select id="merge-target"></select>
+        </div>
+        <button class="btn btn-primary" style="margin-bottom:0;" onclick="mergeRoasters()">Merge</button>
+    </div>
+    <p id="merge-msg" style="margin:0.5rem 0 0; font-size:0.9rem; color:#888;"></p>
+</section>
+
 <section class="card">
     <h2>Import</h2>
     <p><strong>Warning:</strong> Importing will replace all existing data in this instance.</p>
@@ -71,5 +92,64 @@ document.getElementById('import-form').addEventListener('submit', async function
         btn.textContent = 'Import Data';
     }
 });
+
+let roasters = [];
+
+function escHtml(s) {
+    return (s ?? '').replace(/[&<>"']/g, ch => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+    ));
+}
+
+async function loadRoasters() {
+    const resp = await fetch('/api/v1/data/roasters');
+    if (!resp.ok) return;
+    roasters = await resp.json();
+    document.getElementById('roaster-list').innerHTML = roasters.length
+        ? '<table class="brew-table"><thead><tr><th>Roaster</th><th>Brews</th>'
+          + '<th>Templates</th><th>Tiers</th><th>Shelf</th></tr></thead><tbody>'
+          + roasters.map(r => `<tr><td><strong>${escHtml(r.roaster)}</strong></td>`
+              + `<td>${r.brews}</td><td>${r.templates}</td>`
+              + `<td>${r.tier_entries}</td><td>${r.shelf}</td></tr>`).join('')
+          + '</tbody></table>'
+        : '<p style="color:#888;">No roasters recorded yet.</p>';
+
+    const options = roasters.map(r =>
+        `<option value="${escHtml(r.roaster)}">${escHtml(r.roaster)} (${r.total})</option>`).join('');
+    document.getElementById('merge-source').innerHTML = options;
+    document.getElementById('merge-target').innerHTML = options;
+}
+
+async function mergeRoasters() {
+    const source = document.getElementById('merge-source').value;
+    const target = document.getElementById('merge-target').value;
+    const msg = document.getElementById('merge-msg');
+    msg.style.color = '#888';
+    if (source === target) {
+        msg.style.color = '#f44336';
+        msg.textContent = 'Pick two different roasters.';
+        return;
+    }
+    if (!confirm(`Rename every "${source}" to "${target}"? This rewrites your data.`)) return;
+    const resp = await fetch('/api/v1/data/roasters/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source, target }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+        msg.style.color = '#f44336';
+        msg.textContent = data.detail || 'Could not merge those roasters.';
+        return;
+    }
+    const u = data.updated;
+    msg.style.color = '#4caf50';
+    msg.textContent = `Merged into "${data.target}" — ${u.brews} brews, `
+        + `${u.brew_templates} templates, ${u.tier_entries} tier entries, `
+        + `${u.bean_inventory} shelf rows.`;
+    loadRoasters();
+}
+
+loadRoasters();
 </script>
 {% endblock %}
