@@ -27,7 +27,16 @@ from app.services import inventory_service, lookup_service, template_service
 
 ALLOWED_HOST = "onyxcoffeelab.com"
 ROASTER = "Onyx Coffee Lab"
-_UA = "Mozilla/5.0 (compatible; CoffeeDataCollection/1.0)"
+# Onyx is behind Cloudflare, which 403s bot-shaped User-Agents. Send ordinary
+# browser headers so the same public pages a customer can open also load here.
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 _GRAMS_PER_OZ = 28.3495
 _GRAMS_PER_LB = 453.592
 
@@ -51,7 +60,7 @@ def _normalize(url: str) -> str:
 
 def _fetch(url: str) -> httpx.Response:
     try:
-        resp = httpx.get(url, headers={"User-Agent": _UA}, follow_redirects=True, timeout=15.0)
+        resp = httpx.get(url, headers=_HEADERS, follow_redirects=True, timeout=15.0)
         resp.raise_for_status()
         return resp
     except httpx.HTTPStatusError as e:
