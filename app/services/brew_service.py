@@ -11,6 +11,10 @@ from app.schemas.brew import BrewCreate, BrewUpdate
 def create_brew(db: Session, data: BrewCreate) -> Brew:
     # Auto-convert temperatures
     values = data.model_dump()
+    # These two are the join key to templates and the shelf — trim before storing.
+    for field in ("bean_name", "roaster"):
+        if values.get(field):
+            values[field] = values[field].strip()
     if values.get("water_temp_f") and not values.get("water_temp_c"):
         values["water_temp_c"] = round((values["water_temp_f"] - 32) * 5 / 9, 1)
     elif values.get("water_temp_c") and not values.get("water_temp_f"):
@@ -64,6 +68,8 @@ def update_brew(db: Session, brew_id: int, data: BrewUpdate) -> Brew | None:
     elif "water_temp_c" in updates and updates["water_temp_c"] and "water_temp_f" not in updates:
         updates["water_temp_f"] = round(updates["water_temp_c"] * 9 / 5 + 32, 1)
     for key, value in updates.items():
+        if key in ("bean_name", "roaster") and value:
+            value = value.strip()
         setattr(brew, key, value)
     db.commit()
     db.refresh(brew)

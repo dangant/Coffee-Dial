@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.models.brew import Brew
 from app.models.template import BrewTemplate
 from app.schemas.template import TemplateCreate, TemplateUpdate
+from app.services.naming import bean_key, clean
 
 # Fields shared between Brew and BrewTemplate (excluding id, timestamps, template_id)
 TEMPLATE_FIELDS = [
@@ -20,7 +21,11 @@ TEMPLATE_FIELDS = [
 
 
 def create_template(db: Session, data: TemplateCreate) -> BrewTemplate:
-    template = BrewTemplate(**data.model_dump())
+    values = data.model_dump()
+    for field in ("bean_name", "roaster"):
+        if field in values:
+            values[field] = clean(values[field])
+    template = BrewTemplate(**values)
     db.add(template)
     db.commit()
     db.refresh(template)
@@ -34,6 +39,8 @@ def create_template_from_brew(db: Session, brew_id: int, name: str) -> BrewTempl
     values = {"name": name}
     for field in TEMPLATE_FIELDS:
         values[field] = getattr(brew, field)
+    for field in ("bean_name", "roaster"):
+        values[field] = clean(values[field])
     template = BrewTemplate(**values)
     db.add(template)
     db.commit()
@@ -49,7 +56,10 @@ def update_template_from_brew(db: Session, brew_id: int) -> BrewTemplate | None:
     if not template:
         return None
     for field in TEMPLATE_FIELDS:
-        setattr(template, field, getattr(brew, field))
+        value = getattr(brew, field)
+        if field in ("bean_name", "roaster"):
+            value = clean(value)
+        setattr(template, field, value)
     db.commit()
     db.refresh(template)
     return template
@@ -89,13 +99,13 @@ def list_templates_on_shelf(db: Session) -> list[BrewTemplate]:
     from app.services import inventory_service
 
     in_stock = {
-        (r["bean_name"], r["roaster"])
+        bean_key(r["bean_name"], r["roaster"])
         for r in inventory_service.list_shelf(db)
         if r["tracked"] and (r["remaining_grams"] or 0) > 0
     }
     return [
         t for t in list_templates(db)
-        if not t.bean_name or (t.bean_name, t.roaster) in in_stock
+        if not t.bean_name or bean_key(t.bean_name, t.roaster) in in_stock
     ]
 
 
@@ -104,6 +114,8 @@ def update_template(db: Session, template_id: int, data: TemplateUpdate) -> Brew
     if not template:
         return None
     for key, value in data.model_dump(exclude_unset=True).items():
+        if key in ("bean_name", "roaster"):
+            value = clean(value)
         setattr(template, key, value)
     db.commit()
     db.refresh(template)

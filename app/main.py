@@ -153,6 +153,46 @@ with engine.connect() as conn:
         conn.execute(text("UPDATE ideas SET needs_review = TRUE WHERE needs_review IS NULL"))
         conn.commit()
 
+    # Trim stray whitespace off the bean/roaster names. Nothing joins these tables
+    # by id, so a trailing space is enough to hide a template from the new-brew form
+    # and to stop its brews drawing down the bag on the shelf.
+    for table in ("brews", "brew_templates"):
+        if table in tables:
+            conn.execute(text(
+                f"UPDATE {table} SET bean_name = TRIM(bean_name) "
+                "WHERE bean_name IS NOT NULL AND bean_name <> TRIM(bean_name)"
+            ))
+            conn.execute(text(
+                f"UPDATE {table} SET roaster = TRIM(roaster) "
+                "WHERE roaster IS NOT NULL AND roaster <> TRIM(roaster)"
+            ))
+            conn.commit()
+
+    # bean_inventory is unique on (bean_name, roaster), so trimming a row could
+    # collide with one that already holds the trimmed name. Those are left alone
+    # for the user to merge by hand rather than failing the deploy.
+    if "bean_inventory" in tables:
+        rows = conn.execute(
+            text("SELECT id, bean_name, roaster FROM bean_inventory")
+        ).fetchall()
+        keys = {(r[1], r[2]) for r in rows}
+        for inv_id, bean_name, roaster in rows:
+            trimmed = (
+                bean_name.strip() if bean_name else bean_name,
+                roaster.strip() if roaster else roaster,
+            )
+            if trimmed == (bean_name, roaster) or trimmed in keys:
+                continue
+            conn.execute(
+                text(
+                    "UPDATE bean_inventory SET bean_name = :b, roaster = :r WHERE id = :i"
+                ),
+                {"b": trimmed[0], "r": trimmed[1], "i": inv_id},
+            )
+            keys.discard((bean_name, roaster))
+            keys.add(trimmed)
+        conn.commit()
+
     # Reconcile brew_devices to the current preferred set on already-seeded DBs.
     # brew.brew_device is stored as a plain string, so removing lookup rows does
     # not affect existing brews — it only changes what the dropdown offers.

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.brew import Brew
 from app.models.inventory import BeanInventory
+from app.services.naming import bean_key, clean
 
 POUR_OVER_GRAMS = 25.0
 ESPRESSO_GRAMS = 18.0
@@ -17,6 +18,7 @@ def upsert_inventory(
     initial_grams: float,
     price: float | None = None,
 ) -> BeanInventory:
+    bean_name, roaster = clean(bean_name), clean(roaster)
     inv = (
         db.query(BeanInventory)
         .filter(BeanInventory.bean_name == bean_name, BeanInventory.roaster == roaster)
@@ -47,6 +49,7 @@ def restock_inventory(
     price: float | None = None,
 ) -> BeanInventory:
     """Add another bag: accumulate grams (and price = total spent) onto the running total."""
+    bean_name, roaster = clean(bean_name), clean(roaster)
     inv = (
         db.query(BeanInventory)
         .filter(BeanInventory.bean_name == bean_name, BeanInventory.roaster == roaster)
@@ -107,13 +110,17 @@ def _dose_lookup(db: Session) -> dict:
     lookup: dict = {}
     for bean_name, roaster, method, grams in rows:
         field = "espresso_dose" if (method or "").strip().lower() == "espresso" else "pour_over_dose"
-        for key in ((bean_name, roaster), (bean_name, None)):
+        for key in (bean_key(bean_name, roaster), bean_key(bean_name, None)):
             lookup.setdefault(key, {})[field] = grams
     return lookup
 
 
 def _doses_for(lookup: dict, bean_name: str, roaster: str | None) -> dict:
-    match = lookup.get((bean_name, roaster)) or lookup.get((bean_name, None)) or {}
+    match = (
+        lookup.get(bean_key(bean_name, roaster))
+        or lookup.get(bean_key(bean_name, None))
+        or {}
+    )
     return {
         "pour_over_dose": match.get("pour_over_dose"),
         "espresso_dose": match.get("espresso_dose"),
@@ -121,9 +128,12 @@ def _doses_for(lookup: dict, bean_name: str, roaster: str | None) -> dict:
 
 
 def _grams_used(db: Session, bean_name: str, roaster: str | None) -> float:
-    q = db.query(func.sum(Brew.bean_amount_grams)).filter(Brew.bean_name == bean_name)
-    if roaster:
-        q = q.filter(Brew.roaster == roaster)
+    bean, roast = bean_key(bean_name, roaster)
+    q = db.query(func.sum(Brew.bean_amount_grams)).filter(
+        func.lower(func.trim(Brew.bean_name)) == bean
+    )
+    if roast:
+        q = q.filter(func.lower(func.trim(Brew.roaster)) == roast)
     return q.scalar() or 0.0
 
 
@@ -133,7 +143,7 @@ def list_shelf(db: Session) -> list[dict]:
     that have no inventory entry yet (marked as untracked).
     """
     inventory = db.query(BeanInventory).order_by(BeanInventory.bean_name).all()
-    inv_keys = {(i.bean_name, i.roaster) for i in inventory}
+    inv_keys = {bean_key(i.bean_name, i.roaster) for i in inventory}
     doses = _dose_lookup(db)
 
     # Beans from brew history not yet tracked
@@ -171,8 +181,11 @@ def list_shelf(db: Session) -> list[dict]:
             }
         )
 
+    seen = set(inv_keys)
     for bean_name, roaster in brew_beans:
-        if (bean_name, roaster) not in inv_keys:
+        key = bean_key(bean_name, roaster)
+        if key not in seen:
+            seen.add(key)
             used = _grams_used(db, bean_name, roaster)
             result.append(
                 {
@@ -205,7 +218,8 @@ def get_lp_data(db: Session, bean_name: str | None = None, pour_over_grams: floa
 
     shelf = list_shelf(db)
     if bean_name:
-        shelf = [r for r in shelf if r["bean_name"] == bean_name]
+        wanted = bean_key(bean_name, None)[0]
+        shelf = [r for r in shelf if bean_key(r["bean_name"], None)[0] == wanted]
 
     total_remaining = sum(
         r["remaining_grams"] for r in shelf if r["remaining_grams"] is not None
