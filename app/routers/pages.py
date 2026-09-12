@@ -115,9 +115,14 @@ def brew_list(
     request: Request,
     roaster: str | None = None,
     brew_method: str | None = None,
+    bean_name: str | None = None,
+    grind: str | None = None,
     db: Session = Depends(get_db),
 ):
-    brews = brew_service.list_brews(db, roaster=roaster, brew_method=brew_method)
+    brews = brew_service.list_brews(
+        db, roaster=roaster, brew_method=brew_method,
+        bean_name=bean_name, grind=grind,
+    )
     if request.headers.get("HX-Request"):
         return templates.TemplateResponse("partials/brew_table.html", {
             "request": request, "brews": brews,
@@ -125,6 +130,7 @@ def brew_list(
     return templates.TemplateResponse("brew_list.html", {
         "request": request, "brews": brews,
         "roaster": roaster or "", "brew_method": brew_method or "",
+        "bean_name": bean_name or "", "grind": grind or "",
     })
 
 

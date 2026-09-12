@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import desc
+from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.brew import Brew
@@ -44,12 +44,23 @@ def list_brews(
     brew_method: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    bean_name: str | None = None,
+    grind: str | None = None,
 ) -> list[Brew]:
     query = db.query(Brew).options(joinedload(Brew.rating))
     if roaster:
         query = query.filter(Brew.roaster.ilike(f"%{roaster}%"))
     if brew_method:
         query = query.filter(Brew.brew_method.ilike(f"%{brew_method}%"))
+    if bean_name:
+        query = query.filter(Brew.bean_name.ilike(f"%{bean_name}%"))
+    if grind:
+        # A setting only means something next to its grinder, so one box searches
+        # both: "Comandante" and "22" each find the same brew.
+        query = query.filter(or_(
+            Brew.grind_setting.ilike(f"%{grind}%"),
+            Brew.grinder.ilike(f"%{grind}%"),
+        ))
     if date_from:
         query = query.filter(Brew.brew_date >= date_from)
     if date_to:

@@ -114,6 +114,8 @@ class BrewListRead(BaseModel):
     roaster: str
     bean_name: str
     brew_method: str
+    grind_setting: str | None = None
+    grinder: str | None = None
     overall_score: float | None = None
     taste_score: float | None = None
 

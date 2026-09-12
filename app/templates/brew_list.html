@@ -14,13 +14,25 @@
         <label>Roaster</label>
         <input type="text" name="roaster" value="{{ roaster }}" placeholder="Filter by roaster..."
             hx-get="/brews" hx-target="#brew-table" hx-trigger="keyup changed delay:300ms"
-            hx-include="[name='brew_method']">
+            hx-include="[name='brew_method'],[name='bean_name'],[name='grind']">
+    </div>
+    <div class="form-group">
+        <label>Bean</label>
+        <input type="text" name="bean_name" value="{{ bean_name }}" placeholder="Filter by bean..."
+            hx-get="/brews" hx-target="#brew-table" hx-trigger="keyup changed delay:300ms"
+            hx-include="[name='roaster'],[name='brew_method'],[name='grind']">
     </div>
     <div class="form-group">
         <label>Brew Method</label>
         <input type="text" name="brew_method" value="{{ brew_method }}" placeholder="Filter by method..."
             hx-get="/brews" hx-target="#brew-table" hx-trigger="keyup changed delay:300ms"
-            hx-include="[name='roaster']">
+            hx-include="[name='roaster'],[name='bean_name'],[name='grind']">
+    </div>
+    <div class="form-group">
+        <label>Grind</label>
+        <input type="text" name="grind" value="{{ grind }}" placeholder="Grinder or setting..."
+            hx-get="/brews" hx-target="#brew-table" hx-trigger="keyup changed delay:300ms"
+            hx-include="[name='roaster'],[name='bean_name'],[name='brew_method']">
     </div>
 </div>
 

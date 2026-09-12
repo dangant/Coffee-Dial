@@ -6,6 +6,7 @@
             <th>Roaster</th>
             <th>Bean</th>
             <th>Method</th>
+            <th>Grind</th>
             <th>Dose / Water</th>
             <th>Score (E / T)</th>
         </tr>
@@ -17,6 +18,15 @@
             <td>{{ brew.roaster }}</td>
             <td>{{ brew.bean_name }}</td>
             <td>{{ brew.brew_method }}</td>
+            <td>
+                {% if brew.grind_setting %}
+                    {{ brew.grind_setting }}{% if brew.grinder %} <span style="color: var(--text-muted); font-size: 0.85rem;">{{ brew.grinder }}</span>{% endif %}
+                {% elif brew.grinder %}
+                    <span style="color: var(--text-muted); font-size: 0.85rem;">{{ brew.grinder }}</span>
+                {% else %}
+                    <span style="color: var(--text-muted);">—</span>
+                {% endif %}
+            </td>
             <td>{{ brew.bean_amount_grams }}g / {{ brew.water_amount_ml }}ml</td>
             <td>
                 {% if brew.brewed_for_friend %}<span class="badge" title="Brewed for a friend — rating not counted">👥</span>{% endif %}

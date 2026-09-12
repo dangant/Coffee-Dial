@@ -23,9 +23,14 @@ def list_brews(
     brew_method: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    bean_name: str | None = None,
+    grind: str | None = None,
     db: Session = Depends(get_db),
 ):
-    brews = brew_service.list_brews(db, skip, limit, roaster, brew_method, date_from, date_to)
+    brews = brew_service.list_brews(
+        db, skip, limit, roaster, brew_method, date_from, date_to,
+        bean_name=bean_name, grind=grind,
+    )
     results = []
     for b in brews:
         results.append(BrewListRead(
@@ -34,6 +39,8 @@ def list_brews(
             roaster=b.roaster,
             bean_name=b.bean_name,
             brew_method=b.brew_method,
+            grind_setting=b.grind_setting,
+            grinder=b.grinder,
             overall_score=b.rating.overall_score if b.rating else None,
             taste_score=b.rating.taste_score if b.rating else None,
         ))

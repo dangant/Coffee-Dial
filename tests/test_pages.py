@@ -58,3 +58,27 @@ def test_brew_detail_page(client):
     assert resp.status_code == 200
     assert "Onyx" in resp.text
     assert "Rate This Brew" in resp.text
+
+
+def test_brew_list_page_has_bean_and_grind_filters(client):
+    client.post("/api/v1/brews/", json={
+        "brew_date": "2025-03-01",
+        "roaster": "Onyx",
+        "bean_name": "Southern Weather",
+        "bean_amount_grams": 18.0,
+        "water_amount_ml": 300.0,
+        "brew_method": "Pour Over",
+        "grind_setting": "22",
+        "grinder": "Comandante C40",
+    })
+    resp = client.get("/brews")
+    assert resp.status_code == 200
+    assert "name=\"bean_name\"" in resp.text
+    assert "name=\"grind\"" in resp.text
+    assert "Comandante C40" in resp.text
+
+    # The HTMX partial honours the new filters too.
+    resp = client.get("/brews?bean_name=Southern", headers={"HX-Request": "true"})
+    assert "Southern Weather" in resp.text
+    resp = client.get("/brews?grind=Niche", headers={"HX-Request": "true"})
+    assert "Southern Weather" not in resp.text
