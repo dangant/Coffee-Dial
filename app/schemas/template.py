@@ -95,6 +95,9 @@ class TemplateUpdate(BaseModel):
 
 class TemplateRead(TemplateBase):
     id: int
+    # Read-only: create/update resolve the bean from the name, but the brew form needs
+    # the id to preselect its bean picker.
+    bean_id: int | None = None
     created_at: datetime
     updated_at: datetime
 

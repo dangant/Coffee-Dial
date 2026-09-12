@@ -39,6 +39,18 @@ function applyFirstBrewHint(selectEl) {
     cb.checked = !!(selectEl && selectEl.value && opt && opt.dataset.firstBrew === '1');
 }
 
+// Assigning to a <select> whose options don't include the value silently leaves it
+// blank — the browser has nothing to select — and the blank is what gets saved. That
+// is how an Onyx "Thermal-Shock" process vanished on its way from template to brew.
+// Carry the value in as its own option rather than dropping it.
+function setFieldValue(el, value) {
+    if (el.tagName === 'SELECT' && value !== '' &&
+        !Array.from(el.options).some(o => o.value === value)) {
+        el.add(new Option(value, value));
+    }
+    el.value = value;
+}
+
 // Template loading
 async function loadTemplate(selectEl) {
     const id = selectEl.value;
@@ -65,7 +77,14 @@ async function loadTemplate(selectEl) {
         };
         for (const [key, formName] of Object.entries(fieldMap)) {
             const el = document.querySelector(`[name="${formName}"]`);
-            if (el && data[key] != null) el.value = data[key];
+            if (el && data[key] != null) setFieldValue(el, data[key]);
+        }
+        // Point the bean picker at the template's coffee, so loading a recipe doesn't
+        // look like a brand new bean about to be minted.
+        const beanEl = document.querySelector('[name="bean_id"]');
+        if (beanEl && data.bean_id != null) {
+            beanEl.value = String(data.bean_id);
+            if (beanEl.value) beanPicked(beanEl);
         }
         // Time fields render as m:ss
         for (const field of ['brew_time_seconds', 'bloom_pour_time_seconds',

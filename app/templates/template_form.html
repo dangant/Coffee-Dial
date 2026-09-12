@@ -77,12 +77,16 @@
             </div>
             <div class="form-group">
                 <label>Roast Level</label>
-                <select name="roast_level">
-                    <option value="">—</option>
-                    {% for r in ["Light", "Medium-Light", "Medium", "Medium-Dark", "Dark"] %}
-                    <option value="{{ r }}" {{ 'selected' if template and template.roast_level == r else '' }}>{{ r }}</option>
+                {# Same reason as process above: Onyx states a roast as "Light Agtron #129",
+                   which matched no option, rendered blank, and was written back as blank on
+                   the next save — quietly erasing what the import had fetched. #}
+                <input type="text" name="roast_level" list="roast-options"
+                       value="{{ template.roast_level or '' if template else '' }}">
+                <datalist id="roast-options">
+                    {% for r in ["Light", "Light Medium", "Medium-Light", "Medium", "Medium-Dark", "Dark"] %}
+                    <option value="{{ r }}">
                     {% endfor %}
-                </select>
+                </datalist>
             </div>
             <div class="form-group full-width">
                 <label>Product Link</label>

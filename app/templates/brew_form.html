@@ -45,12 +45,16 @@
             </div>
             <div class="form-group">
                 <label>Process</label>
-                <select name="bean_process">
-                    <option value="">—</option>
-                    {% for p in ["Washed", "Natural", "Honey", "Anaerobic", "Co-ferment", "Wet-Hulled", "Other"] %}
-                    <option value="{{ p }}" {{ 'selected' if brew and brew.bean_process == p else '' }}>{{ p }}</option>
+                {# Text + datalist, not a select. Loading a template assigns the stored
+                   value straight onto this field, and a <select> with no matching option
+                   silently keeps "" — which is why an Onyx "Thermal-Shock" arrived blank. #}
+                <input type="text" name="bean_process" list="process-options"
+                       value="{{ brew.bean_process or '' if brew else '' }}">
+                <datalist id="process-options">
+                    {% for p in ["Washed", "Natural", "Honey", "Anaerobic", "Co-ferment", "Wet-Hulled", "Thermal-Shock", "Other"] %}
+                    <option value="{{ p }}">
                     {% endfor %}
-                </select>
+                </datalist>
             </div>
             <div class="form-group">
                 <label>Roast Date</label>
@@ -58,12 +62,13 @@
             </div>
             <div class="form-group">
                 <label>Roast Level</label>
-                <select name="roast_level">
-                    <option value="">—</option>
-                    {% for r in ["Light", "Medium-Light", "Medium", "Medium-Dark", "Dark"] %}
-                    <option value="{{ r }}" {{ 'selected' if brew and brew.roast_level == r else '' }}>{{ r }}</option>
+                <input type="text" name="roast_level" list="roast-options"
+                       value="{{ brew.roast_level or '' if brew else '' }}">
+                <datalist id="roast-options">
+                    {% for r in ["Light", "Light Medium", "Medium-Light", "Medium", "Medium-Dark", "Dark"] %}
+                    <option value="{{ r }}">
                     {% endfor %}
-                </select>
+                </datalist>
             </div>
             <div class="form-group full-width">
                 <label>Expected Flavor Notes (select up to 4)</label>

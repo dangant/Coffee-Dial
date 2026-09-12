@@ -97,3 +97,50 @@ def test_brew_draws_down_a_bag_stocked_under_an_untrimmed_name(db, client):
     assert row["remaining_grams"] == 315.0
     # And it is not also listed as a second, untracked bean.
     assert sum(1 for r in inventory_service.list_shelf(db) if "Dota" in r["bean_name"]) == 1
+
+
+def test_unlisted_process_and_roast_survive_the_forms(client):
+    """Onyx states "Thermal-Shock" and "Light Agtron #129"; neither is on a fixed list.
+
+    Both fields used to render as a <select>. A stored value matching no option showed
+    as blank and was written back as blank on the next save, so editing a template
+    quietly erased what the import had fetched.
+    """
+    created = client.post("/api/v1/templates/", json={
+        "name": "India Ratnagiri Thermal-Shock — Pour Over",
+        "roaster": "Onyx",
+        "bean_name": "India Ratnagiri Thermal-Shock",
+        "bean_process": "Thermal-Shock",
+        "roast_level": "Light Agtron #129",
+        "brew_method": "Pour Over",
+    })
+    assert created.status_code == 201, created.text
+    template_id = created.json()["id"]
+
+    # The edit form shows both values instead of an empty dropdown.
+    page = client.get(f"/templates/{template_id}/edit")
+    assert page.status_code == 200
+    assert "Thermal-Shock" in page.text
+    assert "Light Agtron #129" in page.text
+
+    # And the brew form offers them as free text, so a loaded template can assign them.
+    form = client.get("/brews/new")
+    assert 'name="bean_process"' in form.text
+    assert 'list="process-options"' in form.text
+    assert 'name="roast_level"' in form.text
+    assert 'list="roast-options"' in form.text
+    assert "<select name=\"bean_process\"" not in form.text
+    assert "<select name=\"roast_level\"" not in form.text
+
+
+def test_template_read_exposes_its_bean_id(client):
+    """The brew form needs it to preselect the bean picker when a template loads."""
+    created = client.post("/api/v1/templates/", json={
+        "name": "Ratnagiri Espresso",
+        "roaster": "Onyx",
+        "bean_name": "India Ratnagiri Thermal-Shock",
+        "brew_method": "Espresso",
+    })
+    template_id = created.json()["id"]
+    read = client.get(f"/api/v1/templates/{template_id}").json()
+    assert read["bean_id"]
