@@ -32,6 +32,28 @@
     <p id="merge-msg" style="margin:0.5rem 0 0; font-size:0.9rem; color:#888;"></p>
 </section>
 
+<section class="card" style="margin-bottom: 2rem;">
+    <h2>Beans</h2>
+    <p>
+        Every coffee now has an id, and the forms pick from this list rather than
+        retyping a name. Spellings that drifted apart before that — "Dota" and
+        "Dota Lot 3" — are still two beans until they are merged here.
+    </p>
+    <div id="bean-list" style="margin-bottom: 1rem;"></div>
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:flex-end;">
+        <div class="form-group" style="min-width:200px; margin:0;">
+            <label>Merge this bean</label>
+            <select id="bean-merge-source"></select>
+        </div>
+        <div class="form-group" style="min-width:200px; margin:0;">
+            <label>into this one (the name kept)</label>
+            <select id="bean-merge-target"></select>
+        </div>
+        <button class="btn btn-primary" style="margin-bottom:0;" onclick="mergeBeans()">Merge</button>
+    </div>
+    <p id="bean-merge-msg" style="margin:0.5rem 0 0; font-size:0.9rem; color:#888;"></p>
+</section>
+
 <section class="card">
     <h2>Import</h2>
     <p><strong>Warning:</strong> Importing will replace all existing data in this instance.</p>
@@ -150,6 +172,64 @@ async function mergeRoasters() {
     loadRoasters();
 }
 
+async function loadBeans() {
+    const resp = await fetch('/api/v1/data/beans');
+    if (!resp.ok) return;
+    const beans = await resp.json();
+    const label = b => (b.roaster ? `${b.roaster} — ${b.name}` : b.name);
+    document.getElementById('bean-list').innerHTML = beans.length
+        ? '<table class="brew-table"><thead><tr><th>Bean</th><th>Roaster</th><th>Brews</th>'
+          + '<th>Templates</th><th>Tiers</th><th>Shelf</th></tr></thead><tbody>'
+          + beans.map(b => `<tr><td><strong>${escHtml(b.name)}</strong></td>`
+              + `<td>${escHtml(b.roaster ?? '—')}</td>`
+              + `<td>${b.brews}</td><td>${b.templates}</td>`
+              + `<td>${b.tier_entries}</td><td>${b.shelf}</td></tr>`).join('')
+          + '</tbody></table>'
+        : '<p style="color:#888;">No beans recorded yet.</p>';
+
+    const options = beans.map(b =>
+        `<option value="${b.id}">${escHtml(label(b))} (${b.total})</option>`).join('');
+    document.getElementById('bean-merge-source').innerHTML = options;
+    document.getElementById('bean-merge-target').innerHTML = options;
+}
+
+async function mergeBeans() {
+    const sourceEl = document.getElementById('bean-merge-source');
+    const targetEl = document.getElementById('bean-merge-target');
+    const msg = document.getElementById('bean-merge-msg');
+    msg.style.color = '#888';
+    if (!sourceEl.value || sourceEl.value === targetEl.value) {
+        msg.style.color = '#f44336';
+        msg.textContent = 'Pick two different beans.';
+        return;
+    }
+    const sourceLabel = sourceEl.options[sourceEl.selectedIndex].textContent.trim();
+    const targetLabel = targetEl.options[targetEl.selectedIndex].textContent.trim();
+    if (!confirm(`Fold "${sourceLabel}" into "${targetLabel}"? `
+        + 'Brews, templates, tier entries and shelf bags all move over, and the '
+        + 'shelf rows are combined. This rewrites your data.')) return;
+    const resp = await fetch('/api/v1/data/beans/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            source_id: Number(sourceEl.value), target_id: Number(targetEl.value),
+        }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+        msg.style.color = '#f44336';
+        msg.textContent = data.detail || 'Could not merge those beans.';
+        return;
+    }
+    const u = data.updated;
+    msg.style.color = '#4caf50';
+    msg.textContent = `Merged into "${data.target.name}" — ${u.brews} brews, `
+        + `${u.brew_templates} templates, ${u.tier_entries} tier entries, `
+        + `${u.bean_inventory} shelf rows.`;
+    loadBeans();
+}
+
 loadRoasters();
+loadBeans();
 </script>
 {% endblock %}

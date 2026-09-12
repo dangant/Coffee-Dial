@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.bean import Bean
 from app.models.brew import Brew
 from app.models.rating import Rating
 from app.models.template import BrewTemplate
@@ -18,7 +19,7 @@ from app.models.idea import Idea
 from app.models.idea_screenshot import IdeaScreenshot
 from app.models.tier_entry import TierEntry
 from app.models.lookups import FlavorNote, BrewDevice, Grinder, BrewMethod
-from app.services import roaster_service
+from app.services import bean_service, roaster_service
 
 router = APIRouter(prefix="/api/v1/data", tags=["data"])
 
@@ -303,6 +304,18 @@ def import_all(file: UploadFile = File(...), db: Session = Depends(get_db)):
 
     db.commit()
 
+    # An export carries names, not bean ids — and an import wipes the rows those ids
+    # pointed at. Relink here rather than waiting for the next restart, so the shelf
+    # and the template list are right the moment the import finishes.
+    db.query(Bean).delete()
+    db.flush()
+    bean_service.backfill_bean_ids(
+        db.connection(),
+        ("brews", "brew_templates", "bean_inventory", "tier_entries"),
+        commit=False,
+    )
+    db.commit()
+
     return {"status": "ok", "imported": counts}
 
 
@@ -321,5 +334,25 @@ def list_roasters(db: Session = Depends(get_db)):
 def merge_roasters(body: RoasterMerge, db: Session = Depends(get_db)):
     try:
         return roaster_service.merge_roasters(db, body.source, body.target)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class BeanMerge(BaseModel):
+    source_id: int
+    target_id: int
+
+
+@router.get("/beans")
+def list_beans(db: Session = Depends(get_db)):
+    """Every bean with where it is used. The backfill can't guess that "Dota" and
+    "Dota Lot 3" are one coffee, so near-duplicates are merged here by hand."""
+    return bean_service.list_beans(db)
+
+
+@router.post("/beans/merge")
+def merge_beans(body: BeanMerge, db: Session = Depends(get_db)):
+    try:
+        return bean_service.merge_beans(db, body.source_id, body.target_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

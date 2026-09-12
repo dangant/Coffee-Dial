@@ -33,14 +33,12 @@
                 <label>Brew Date *</label>
                 <input type="date" name="brew_date" value="{{ brew.brew_date if brew else today }}" required>
             </div>
-            <div class="form-group">
-                <label>Roaster *</label>
-                <input type="text" name="roaster" value="{{ brew.roaster if brew else '' }}" required placeholder="e.g., Onyx Coffee Lab">
-            </div>
-            <div class="form-group">
-                <label>Bean Name *</label>
-                <input type="text" name="bean_name" value="{{ brew.bean_name if brew else '' }}" required placeholder="e.g., Sagastume Family Natural">
-            </div>
+            {% with bean_required = True,
+                    selected_bean_id = brew.bean_id if brew else None,
+                    roaster_value = brew.roaster if brew else '',
+                    bean_value = brew.bean_name if brew else '' %}
+                {% include "partials/bean_picker.html" %}
+            {% endwith %}
             <div class="form-group">
                 <label>Origin</label>
                 <input type="text" name="bean_origin" value="{{ brew.bean_origin or '' if brew else '' }}" placeholder="e.g., Honduras">

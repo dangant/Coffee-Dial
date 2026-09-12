@@ -20,3 +20,9 @@ def bean_key(bean_name: str | None, roaster: str | None) -> tuple[str, str | Non
         (bean_name or "").strip().casefold(),
         (roaster or "").strip().casefold() or None,
     )
+
+
+def match_key(bean_name: str | None, roaster: str | None) -> str:
+    """:func:`bean_key` flattened to one string, for storing in a unique column."""
+    bean, roast = bean_key(bean_name, roaster)
+    return f"{bean}\x1f{roast or ''}"

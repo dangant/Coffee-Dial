@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.brew import Brew
 from app.models.rating import Rating
 from app.schemas.brew import BrewCreate, BrewUpdate
+from app.services import bean_service
 
 
 def create_brew(db: Session, data: BrewCreate) -> Brew:
@@ -21,6 +22,10 @@ def create_brew(db: Session, data: BrewCreate) -> Brew:
         values["water_temp_f"] = round(values["water_temp_c"] * 9 / 5 + 32, 1)
 
     brew = Brew(**values)
+    # Every write goes through get_or_create, so a brew is attached to the coffee
+    # itself rather than only to the spelling typed on the day.
+    bean = bean_service.get_or_create(db, values.get("bean_name"), values.get("roaster"))
+    brew.bean_id = bean.id if bean else None
     db.add(brew)
     db.commit()
     db.refresh(brew)
@@ -82,6 +87,11 @@ def update_brew(db: Session, brew_id: int, data: BrewUpdate) -> Brew | None:
         if key in ("bean_name", "roaster") and value:
             value = value.strip()
         setattr(brew, key, value)
+    # Re-resolve when either half of the identity changed, so an edit that fixes a
+    # spelling moves the brew onto the right coffee instead of leaving a stale id.
+    if "bean_name" in updates or "roaster" in updates:
+        bean = bean_service.get_or_create(db, brew.bean_name, brew.roaster)
+        brew.bean_id = bean.id if bean else None
     db.commit()
     db.refresh(brew)
     return brew

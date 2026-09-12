@@ -1,10 +1,11 @@
 import math
 
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.models.brew import Brew
 from app.models.inventory import BeanInventory
+from app.services import bean_service
 from app.services.naming import bean_key, clean
 
 POUR_OVER_GRAMS = 25.0
@@ -29,11 +30,13 @@ def upsert_inventory(
         if price is not None:
             inv.price = price
     else:
+        bean = bean_service.get_or_create(db, bean_name, roaster)
         inv = BeanInventory(
             bean_name=bean_name, roaster=roaster,
+            bean_id=bean.id if bean else None,
             initial_amount_grams=initial_grams, price=price,
             # Anchor tracking: don't count brews made before this bean was added.
-            used_offset_grams=_grams_used(db, bean_name, roaster),
+            used_offset_grams=_grams_used(db, bean_name, roaster, bean.id if bean else None),
         )
         db.add(inv)
     db.commit()
@@ -60,11 +63,13 @@ def restock_inventory(
         if price is not None:
             inv.price = (inv.price or 0) + price
     else:
+        bean = bean_service.get_or_create(db, bean_name, roaster)
         inv = BeanInventory(
             bean_name=bean_name, roaster=roaster,
+            bean_id=bean.id if bean else None,
             initial_amount_grams=add_grams, price=price,
             # Anchor tracking: don't count brews made before this bean was added.
-            used_offset_grams=_grams_used(db, bean_name, roaster),
+            used_offset_grams=_grams_used(db, bean_name, roaster, bean.id if bean else None),
         )
         db.add(inv)
     db.commit()
@@ -127,14 +132,21 @@ def _doses_for(lookup: dict, bean_name: str, roaster: str | None) -> dict:
     }
 
 
-def _grams_used(db: Session, bean_name: str, roaster: str | None) -> float:
+def _grams_used(db: Session, bean_name: str, roaster: str | None, bean_id: int | None = None) -> float:
+    """Grams of this coffee brewed so far.
+
+    Prefers ``bean_id`` — a brew explicitly linked to a different coffee must not
+    count here just because the names look alike — but still matches unlinked brews
+    by name, so a row the backfill couldn't resolve keeps drawing down its bag.
+    """
     bean, roast = bean_key(bean_name, roaster)
-    q = db.query(func.sum(Brew.bean_amount_grams)).filter(
-        func.lower(func.trim(Brew.bean_name)) == bean
-    )
+    by_name = func.lower(func.trim(Brew.bean_name)) == bean
     if roast:
-        q = q.filter(func.lower(func.trim(Brew.roaster)) == roast)
-    return q.scalar() or 0.0
+        by_name = and_(by_name, func.lower(func.trim(Brew.roaster)) == roast)
+    match = by_name
+    if bean_id is not None:
+        match = or_(Brew.bean_id == bean_id, and_(Brew.bean_id.is_(None), by_name))
+    return db.query(func.sum(Brew.bean_amount_grams)).filter(match).scalar() or 0.0
 
 
 def list_shelf(db: Session) -> list[dict]:
@@ -148,7 +160,7 @@ def list_shelf(db: Session) -> list[dict]:
 
     # Beans from brew history not yet tracked
     brew_beans = (
-        db.query(Brew.bean_name, Brew.roaster)
+        db.query(Brew.bean_name, Brew.roaster, Brew.bean_id)
         .distinct()
         .filter(Brew.bean_name.isnot(None))
         .order_by(Brew.bean_name)
@@ -159,11 +171,16 @@ def list_shelf(db: Session) -> list[dict]:
 
     for inv in inventory:
         # Only count brews since this bean was added to the shelf (offset out prior history).
-        used = max(0.0, _grams_used(db, inv.bean_name, inv.roaster) - (inv.used_offset_grams or 0.0))
+        used = max(
+            0.0,
+            _grams_used(db, inv.bean_name, inv.roaster, inv.bean_id)
+            - (inv.used_offset_grams or 0.0),
+        )
         remaining = max(0.0, inv.initial_amount_grams - used)
         result.append(
             {
                 "id": inv.id,
+                "bean_id": inv.bean_id,
                 "bean_name": inv.bean_name,
                 "roaster": inv.roaster,
                 "initial_grams": inv.initial_amount_grams,
@@ -182,14 +199,15 @@ def list_shelf(db: Session) -> list[dict]:
         )
 
     seen = set(inv_keys)
-    for bean_name, roaster in brew_beans:
+    for bean_name, roaster, bean_id in brew_beans:
         key = bean_key(bean_name, roaster)
         if key not in seen:
             seen.add(key)
-            used = _grams_used(db, bean_name, roaster)
+            used = _grams_used(db, bean_name, roaster, bean_id)
             result.append(
                 {
                     "id": None,
+                    "bean_id": bean_id,
                     "bean_name": bean_name,
                     "roaster": roaster,
                     "initial_grams": None,

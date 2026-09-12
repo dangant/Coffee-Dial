@@ -1,0 +1,32 @@
+{# Pick the coffee, don't retype its name.
+
+   A primary key alone fixes nothing if the form keeps minting beans from free text —
+   "Dota " and "Dota" were one coffee filed as two. Choosing an existing bean sends its
+   id; "+ New bean" reveals the name fields and mints exactly one.
+
+   The name inputs stay in the DOM and stay filled either way, so the POST always
+   carries roaster and bean_name and nothing downstream has to care which route it took.
+
+   Context: beans, selected_bean_id, bean_required, bean_value, roaster_value. #}
+<div class="form-group">
+    <label>Bean{% if bean_required %} *{% endif %}</label>
+    <select name="bean_id" onchange="beanPicked(this)">
+        <option value="">+ New bean…</option>
+        {% for b in beans %}
+        <option value="{{ b.id }}" data-name="{{ b.name }}" data-roaster="{{ b.roaster or '' }}"
+            {% if selected_bean_id == b.id %}selected{% endif %}>
+            {% if b.roaster %}{{ b.roaster }} — {% endif %}{{ b.name }}
+        </option>
+        {% endfor %}
+    </select>
+</div>
+<div class="form-group new-bean-field">
+    <label>Roaster{% if bean_required %} *{% endif %}</label>
+    <input type="text" name="roaster" value="{{ roaster_value or '' }}"
+           {% if bean_required %}required{% endif %} placeholder="e.g., Onyx Coffee Lab">
+</div>
+<div class="form-group new-bean-field">
+    <label>Bean Name{% if bean_required %} *{% endif %}</label>
+    <input type="text" name="bean_name" value="{{ bean_value or '' }}"
+           {% if bean_required %}required{% endif %} placeholder="e.g., Sagastume Family Natural">
+</div>

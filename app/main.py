@@ -30,6 +30,7 @@ import app.models.inventory  # noqa: F401
 import app.models.idea  # noqa: F401
 import app.models.idea_screenshot  # noqa: F401
 import app.models.tier_entry  # noqa: F401
+import app.models.bean  # noqa: F401
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -192,6 +193,21 @@ with engine.connect() as conn:
             keys.discard((bean_name, roaster))
             keys.add(trimmed)
         conn.commit()
+
+    # Give beans an id the other tables can point at. The bean name stays in place
+    # and stays authoritative for display — bean_id is added beside it, so nothing
+    # that reads by name breaks and no stored name is rewritten by this migration.
+    bean_id_tables = ("brews", "brew_templates", "bean_inventory", "tier_entries")
+    present = [t for t in bean_id_tables if t in tables]
+    for table in present:
+        cols = [c["name"] for c in inspector.get_columns(table)]
+        _add_column(conn, table, "bean_id", "INTEGER", cols)
+    conn.commit()
+
+    if present:
+        from app.services.bean_service import backfill_bean_ids
+
+        backfill_bean_ids(conn, present)
 
     # Reconcile brew_devices to the current preferred set on already-seeded DBs.
     # brew.brew_device is stored as a plain string, so removing lookup rows does

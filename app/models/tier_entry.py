@@ -29,6 +29,9 @@ class TierEntry(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     coffee_key: Mapped[str] = mapped_column(String(200), nullable=False, unique=True, index=True)
     bean_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    bean_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("beans.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     roaster: Mapped[str | None] = mapped_column(String(200), nullable=True)
     bean_origin: Mapped[str | None] = mapped_column(String(200), nullable=True)
     bean_process: Mapped[str | None] = mapped_column(String(100), nullable=True)

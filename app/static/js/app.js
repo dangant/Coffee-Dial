@@ -573,3 +573,22 @@ window.fetch = async function (input, init) {
 };
 
 startHeartbeat();
+
+// Bean picker: choosing an existing coffee fills (and hides) the name fields, so the
+// form still posts a roaster and bean name while the id decides which coffee it is.
+function beanPicked(select) {
+    const opt = select.options[select.selectedIndex];
+    const picked = !!select.value;
+    const form = select.closest('form') || document;
+    const roaster = form.querySelector("[name='roaster']");
+    const bean = form.querySelector("[name='bean_name']");
+    if (picked) {
+        if (roaster) roaster.value = opt.dataset.roaster || '';
+        if (bean) bean.value = opt.dataset.name || '';
+    }
+    form.querySelectorAll('.new-bean-field').forEach(el => { el.hidden = picked; });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll("select[name='bean_id']").forEach(beanPicked);
+});

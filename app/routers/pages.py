@@ -13,6 +13,7 @@ from app.schemas.rating import RatingCreate
 from app.schemas.template import TemplateCreate, TemplateUpdate
 from app.services import (
     analytics_service,
+    bean_service,
     brew_service,
     lookup_service,
     rating_service,
@@ -96,7 +97,22 @@ def _get_lookups(db: Session) -> dict:
         "brew_devices": lookup_service.list_brew_devices(db),
         "brew_methods": lookup_service.list_brew_methods(db),
         "grinders": lookup_service.list_grinders(db),
+        # Feeds the bean picker on the brew and template forms.
+        "beans": bean_service.list_beans(db),
     }
+
+
+def _resolve_bean(db: Session, bean_id: str, roaster: str, bean_name: str) -> tuple[str, str]:
+    """The picked bean's canonical spelling wins over whatever is in the text inputs.
+
+    Posting names alone still works — that is what the API and the Onyx import do —
+    so this only narrows things when the form actually sent an id.
+    """
+    if bean_id:
+        bean = bean_service.get_bean(db, int(bean_id))
+        if bean:
+            return bean.roaster or roaster, bean.name
+    return roaster, bean_name
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -152,6 +168,7 @@ def new_brew_form(request: Request, db: Session = Depends(get_db)):
 def create_brew_form(
     request: Request,
     brew_date: str = Form(...),
+    bean_id: str = Form(""),
     roaster: str = Form(...),
     bean_name: str = Form(...),
     bean_origin: str = Form(""),
@@ -198,6 +215,7 @@ def create_brew_form(
             temp_f = temp_val
 
     notes_str = ", ".join(flavor_notes_expected) if flavor_notes_expected else None
+    roaster, bean_name = _resolve_bean(db, bean_id, roaster, bean_name)
 
     data = BrewCreate(
         brew_date=date.fromisoformat(brew_date),
@@ -270,6 +288,7 @@ def update_brew_form(
     request: Request,
     brew_id: int,
     brew_date: str = Form(...),
+    bean_id: str = Form(""),
     roaster: str = Form(...),
     bean_name: str = Form(...),
     bean_origin: str = Form(""),
@@ -315,6 +334,7 @@ def update_brew_form(
             temp_f = temp_val
 
     notes_str = ", ".join(flavor_notes_expected) if flavor_notes_expected else None
+    roaster, bean_name = _resolve_bean(db, bean_id, roaster, bean_name)
 
     data = BrewCreate(
         brew_date=date.fromisoformat(brew_date),
@@ -438,6 +458,7 @@ def new_template_form(request: Request, db: Session = Depends(get_db)):
 def create_template_form(
     request: Request,
     name: str = Form(...),
+    bean_id: str = Form(""),
     roaster: str = Form(""),
     bean_name: str = Form(""),
     bean_origin: str = Form(""),
@@ -488,6 +509,7 @@ def create_template_form(
             temp_f = temp_val
 
     notes_str = ", ".join(flavor_notes_expected) if flavor_notes_expected else None
+    roaster, bean_name = _resolve_bean(db, bean_id, roaster, bean_name)
 
     data = TemplateCreate(
         name=name,
@@ -552,6 +574,7 @@ def update_template_form(
     request: Request,
     template_id: int,
     name: str = Form(...),
+    bean_id: str = Form(""),
     roaster: str = Form(""),
     bean_name: str = Form(""),
     bean_origin: str = Form(""),
@@ -602,6 +625,7 @@ def update_template_form(
             temp_f = temp_val
 
     notes_str = ", ".join(flavor_notes_expected) if flavor_notes_expected else None
+    roaster, bean_name = _resolve_bean(db, bean_id, roaster, bean_name)
 
     data = TemplateUpdate(
         name=name,

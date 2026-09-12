@@ -13,6 +13,11 @@ class Brew(Base):
     brew_date: Mapped[date] = mapped_column(Date, nullable=False)
     roaster: Mapped[str] = mapped_column(String(200), nullable=False)
     bean_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    # The coffee this brew is of. Nullable: the name above stays authoritative for
+    # display, and a row the backfill could not resolve is better unlinked than wrong.
+    bean_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("beans.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     bean_origin: Mapped[str | None] = mapped_column(String(200), nullable=True)
     bean_process: Mapped[str | None] = mapped_column(String(100), nullable=True)
     roast_date: Mapped[date | None] = mapped_column(Date, nullable=True)

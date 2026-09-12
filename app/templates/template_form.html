@@ -15,14 +15,12 @@
 
         <h3 style="margin-bottom: 1rem; color: var(--primary);">Bean Info (all optional)</h3>
         <div class="form-grid">
-            <div class="form-group">
-                <label>Roaster</label>
-                <input type="text" name="roaster" value="{{ template.roaster or '' if template else '' }}" placeholder="e.g., Onyx Coffee Lab">
-            </div>
-            <div class="form-group">
-                <label>Bean Name</label>
-                <input type="text" name="bean_name" value="{{ template.bean_name or '' if template else '' }}">
-            </div>
+            {% with bean_required = False,
+                    selected_bean_id = template.bean_id if template else None,
+                    roaster_value = template.roaster or '' if template else '',
+                    bean_value = template.bean_name or '' if template else '' %}
+                {% include "partials/bean_picker.html" %}
+            {% endwith %}
             <div class="form-group">
                 <label>Origin</label>
                 <input type="text" name="bean_origin" value="{{ template.bean_origin or '' if template else '' }}">

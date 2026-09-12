@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -13,6 +13,9 @@ class BrewTemplate(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     roaster: Mapped[str | None] = mapped_column(String(200), nullable=True)
     bean_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    bean_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("beans.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     bean_origin: Mapped[str | None] = mapped_column(String(200), nullable=True)
     bean_process: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # The rest of Onyx's attribute wheel — everything the product page states about
