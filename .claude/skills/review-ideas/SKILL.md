@@ -97,8 +97,26 @@ recommend an order. End the turn with `ExitPlanMode`.
 For gated ideas, write no application code and do not commit: the user reviews and approves
 those before they are implemented.
 
-## 7. Report
+## 7. Tick off what you shipped
 
-Close with what happened to each open idea: shipped (with the commit), planned and awaiting
-approval, or held back with the reason. Never tick an idea done in the app — that is the
-user's call.
+Mark an idea done once you have actually shipped and verified it:
+
+```
+PUT /api/v1/ideas/<id>   {"is_done": true}
+```
+
+against the same host `fetch_ideas.py` reported as `source`. The app stamps `completed_at`
+itself and moves the row into Done, so the user doesn't have to revisit the page to close
+out work they can already see landed.
+
+**Only what you completed.** A gated idea you planned, an idea held at the comprehension
+gate, and anything you shipped partially all stay open. Ticking those destroys the signal
+the user relies on to know what still needs them — the cost of leaving one open too long is
+an extra glance; the cost of closing one early is work that silently disappears.
+
+Never tick an idea you did not implement in this pass.
+
+## 8. Report
+
+Close with what happened to each open idea: shipped (with the commit) and ticked off,
+planned and awaiting approval, or held back with the reason.

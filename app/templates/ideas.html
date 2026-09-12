@@ -201,9 +201,18 @@ function fmtDate(iso) {
 
 function rowHtml(idea) {
     const done = idea.is_done;
-    const stamp = done
-        ? `done ${fmtDate(idea.completed_at)}`
-        : `added ${fmtDate(idea.created_at)}`;
+    // Both dates, always. Showing only one meant ticking an idea off erased the day
+    // it was raised, which is the half worth keeping.
+    const parts = [];
+    const added = fmtDate(idea.created_at);
+    if (added) parts.push(`added ${added}`);
+    if (done) {
+        // Ideas ticked before completed_at existed have no resolved date — say "done"
+        // plainly rather than inventing one.
+        const finished = fmtDate(idea.completed_at);
+        parts.push(finished ? `done ${finished}` : 'done');
+    }
+    const stamp = parts.join(' · ');
     return `
         <div class="idea-row ${done ? 'done' : ''}" id="idea-${idea.id}">
             <input type="checkbox" ${done ? 'checked' : ''} onchange="setDone(${idea.id}, this.checked)"

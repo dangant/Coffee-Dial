@@ -290,3 +290,21 @@ def test_a_pre_gate_backup_restores_as_gated(client):
                 files={"file": ("old.json", json.dumps(old_backup), "application/json")})
 
     assert client.get("/api/v1/ideas").json()[0]["needs_review"] is True
+
+
+def test_a_done_idea_still_reports_when_it_was_raised(client):
+    """The page shows both dates, so both have to survive being ticked off."""
+    created = client.post("/api/v1/ideas", json={"title": "Show both dates"}).json()
+    raised = created["created_at"]
+
+    done = client.put(f"/api/v1/ideas/{created['id']}", json={"is_done": True}).json()
+    assert done["created_at"] == raised, "ticking an idea must not move the date it was raised"
+    assert done["completed_at"] is not None
+
+
+def test_ideas_page_renders_both_dates(client):
+    """Guards the rendering itself: the row used to show one date or the other."""
+    page = client.get("/ideas")
+    assert page.status_code == 200
+    assert "added ${added}" in page.text
+    assert "done ${finished}" in page.text
