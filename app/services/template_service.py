@@ -72,20 +72,22 @@ def update_template_from_brew(db: Session, brew_id: int) -> BrewTemplate | None:
 
 
 def brew_counts(db: Session) -> dict[int, int]:
-    """How many brews have been logged against each template, keyed by template id.
+    """Per template, how many brews exist of *that template's coffee*.
 
-    Used to pre-tick "first brew" on the brew form for a template nothing has
-    been brewed from yet.
+    Pre-ticks "first brew" on the brew form. Counting per template made a coffee
+    brewed as both espresso and pour over look new twice — the second recipe's first
+    brew earned a second marker for a bean already brewed. A first brew is about the
+    bean, not the recipe, so the count follows the bean.
     """
-    from sqlalchemy import func
+    from app.services.brew_service import beans_brewed_before
 
-    rows = (
-        db.query(Brew.template_id, func.count(Brew.id))
-        .filter(Brew.template_id.isnot(None))
-        .group_by(Brew.template_id)
-        .all()
-    )
-    return {tpl_id: count for tpl_id, count in rows}
+    brewed = beans_brewed_before(db)
+    counts = {}
+    for tpl in db.query(BrewTemplate).all():
+        key = tpl.bean_id or bean_key(tpl.bean_name, tpl.roaster)
+        # A template with no bean is a generic recipe — never pre-tick off it.
+        counts[tpl.id] = 1 if (not tpl.bean_name or key in brewed) else 0
+    return counts
 
 
 def get_template(db: Session, template_id: int) -> BrewTemplate | None:

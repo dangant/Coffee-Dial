@@ -8,6 +8,9 @@
             <th>Method</th>
             <th>Grind</th>
             <th>Dose / Water</th>
+            {# Flags get their own column: sharing the score cell wrapped E and T onto
+               two lines on flagged rows and left the table ragged. #}
+            <th></th>
             <th>Score (E / T)</th>
         </tr>
     </thead>
@@ -28,9 +31,13 @@
                 {% endif %}
             </td>
             <td>{{ brew.bean_amount_grams }}g / {{ brew.water_amount_ml }}ml</td>
-            <td>
+            <td class="brew-flags">
                 {% if brew.brewed_for_friend %}<span class="badge" title="Brewed for a friend — rating not counted">👥</span>{% endif %}
-                {% if brew.is_first_brew %}<span class="badge" title="First brew — still calibrating, rating not counted">🎯</span>{% endif %}
+                {# Only the earliest flagged brew of a coffee is its first — a second bag
+                   or a second brew method doesn't earn another marker. #}
+                {% if brew.is_first_brew and brew.id in first_brew_ids %}<span class="badge" title="First brew — still calibrating, rating not counted">🎯</span>{% endif %}
+            </td>
+            <td>
                 {% if brew.rating %}
                     <span class="badge badge-score" title="Execution">E {{ brew.rating.overall_score }}</span>
                     {% if brew.rating.taste_score %}

@@ -1,11 +1,22 @@
-from sqlalchemy import func, or_
+from sqlalchemy import false, func, or_
 from sqlalchemy.orm import Session
 
 from app.models.brew import Brew
 from app.models.rating import Rating
+from app.services import brew_service
 
 
-def _counted(query, include_excluded: bool = False):
+def _first_brew_filter(db: Session):
+    """Condition matching the brews that really are a coffee's first.
+
+    Only the earliest flagged brew per coffee counts, so a second bag or a second
+    brew method doesn't take another rating out of the averages.
+    """
+    ids = brew_service.effective_first_brew_ids(db)
+    return Brew.id.in_(ids) if ids else false()
+
+
+def _counted(query, include_excluded: bool = False, db: Session | None = None):
     """Drop brews whose rating shouldn't shape the stats.
 
     A brew made for a friend was rated to someone else's taste, and a first
@@ -14,23 +25,24 @@ def _counted(query, include_excluded: bool = False):
     """
     if include_excluded:
         return query
-    return query.filter(
-        ~Brew.brewed_for_friend.is_(True),
-        ~Brew.is_first_brew.is_(True),
-    )
+    query = query.filter(~Brew.brewed_for_friend.is_(True))
+    if db is not None:
+        return query.filter(~_first_brew_filter(db))
+    return query.filter(~Brew.is_first_brew.is_(True))
 
 
 def get_summary(db: Session, include_excluded: bool = False) -> dict:
     total_brews = db.query(func.count(Brew.id)).scalar() or 0
     excluded_brews = (
         db.query(func.count(Brew.id))
-        .filter(or_(Brew.brewed_for_friend.is_(True), Brew.is_first_brew.is_(True)))
+        .filter(or_(Brew.brewed_for_friend.is_(True), _first_brew_filter(db)))
         .scalar()
         or 0
     )
     rated = _counted(
         db.query(Rating).select_from(Rating).join(Brew, Rating.brew_id == Brew.id),
         include_excluded,
+        db,
     )
     avg_score = rated.with_entities(func.avg(Rating.overall_score)).scalar()
     avg_score = round(avg_score, 2) if avg_score else None
@@ -54,6 +66,7 @@ def get_summary(db: Session, include_excluded: bool = False) -> dict:
             db.query(Brew.roaster, Brew.bean_name, func.avg(Rating.overall_score).label("avg"))
             .join(Rating, Rating.brew_id == Brew.id),
             include_excluded,
+            db,
         )
         .group_by(Brew.roaster, Brew.bean_name)
         .having(func.count(Rating.id) >= 1)
@@ -65,6 +78,7 @@ def get_summary(db: Session, include_excluded: bool = False) -> dict:
             db.query(Brew.roaster, Brew.bean_name, func.avg(Rating.taste_score).label("avg"))
             .join(Rating, Rating.brew_id == Brew.id),
             include_excluded,
+            db,
         )
         .filter(Rating.taste_score.isnot(None))
         .group_by(Brew.roaster, Brew.bean_name)
@@ -78,6 +92,7 @@ def get_summary(db: Session, include_excluded: bool = False) -> dict:
             .select_from(Rating)
             .join(Brew, Rating.brew_id == Brew.id),
             include_excluded,
+            db,
         )
         .filter(Rating.flavor_notes_accuracy.isnot(None))
         .scalar()
@@ -143,7 +158,7 @@ def get_trends(
         .select_from(Brew)
         .join(Rating, Rating.brew_id == Brew.id)
     )
-    query = _counted(query, include_excluded)
+    query = _counted(query, include_excluded, db)
     if bean_name:
         query = query.filter(Brew.bean_name == bean_name)
     if grinder:
@@ -207,7 +222,7 @@ def get_correlations(
         .join(Rating, Rating.brew_id == Brew.id)
         .filter(x_col.isnot(None), y_col.isnot(None))
     )
-    query = _counted(query, include_excluded)
+    query = _counted(query, include_excluded, db)
     if x_field == "days_since_roast" or y_field == "days_since_roast":
         query = query.filter(Brew.roast_date.isnot(None), Brew.brew_date.isnot(None))
     if bean_name:

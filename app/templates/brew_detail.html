@@ -152,10 +152,11 @@
 
 <!-- Rating -->
 <div class="card">
-    {% if brew.brewed_for_friend or brew.is_first_brew %}
+    {% set counts_as_first = brew.is_first_brew and brew.id in first_brew_ids %}
+    {% if brew.brewed_for_friend or counts_as_first %}
     <p style="margin: 0 0 1rem; font-size: 0.85rem; color: var(--text-muted, #888);">
         {% if brew.brewed_for_friend %}<span class="badge">👥 Brewed for a friend</span>{% endif %}
-        {% if brew.is_first_brew %}<span class="badge">🎯 First brew — calibrating</span>{% endif %}
+        {% if counts_as_first %}<span class="badge">🎯 First brew — calibrating</span>{% endif %}
         Not counted in the analytics averages; the beans were still deducted from the shelf.
     </p>
     {% endif %}

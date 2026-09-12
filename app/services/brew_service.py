@@ -7,6 +7,7 @@ from app.models.brew import Brew
 from app.models.rating import Rating
 from app.schemas.brew import BrewCreate, BrewUpdate
 from app.services import bean_service
+from app.services.naming import bean_key
 
 
 def create_brew(db: Session, data: BrewCreate) -> Brew:
@@ -106,3 +107,43 @@ def delete_brew(db: Session, brew_id: int) -> bool:
     return True
 
 
+
+
+def effective_first_brew_ids(db: Session) -> set[int]:
+    """Brew ids that genuinely count as a first brew — at most one per coffee.
+
+    The checkbox is per brew, and it used to be pre-ticked from the *template's* brew
+    count, so a coffee brewed as both espresso and pour over earned two markers. What
+    is actually meant is "the first time I brewed this bean", buying another bag or
+    dialling a second method included — so among the flagged brews of one coffee, only
+    the earliest survives.
+
+    Derived rather than stored: nothing rewrites the flags, so unticking still works
+    and the rule can change without a migration.
+    """
+    flagged = (
+        db.query(Brew)
+        .filter(Brew.is_first_brew.is_(True))
+        .order_by(Brew.brew_date, Brew.id)
+        .all()
+    )
+    earliest: dict = {}
+    for brew in flagged:
+        # bean_id is the real identity; fall back to the name for any row the
+        # backfill could not resolve, so an unlinked brew still groups sensibly.
+        key = brew.bean_id or bean_key(brew.bean_name, brew.roaster)
+        earliest.setdefault(key, brew.id)
+    return set(earliest.values())
+
+
+def beans_brewed_before(db: Session) -> set:
+    """Identity of every coffee that already has a brew logged against it.
+
+    Feeds the brew form's "first brew" pre-tick. Keyed the same way as
+    :func:`effective_first_brew_ids` so the two agree on what one coffee is.
+    """
+    rows = db.query(Brew.bean_id, Brew.bean_name, Brew.roaster).all()
+    seen = set()
+    for bean_id, bean_name, roaster in rows:
+        seen.add(bean_id or bean_key(bean_name, roaster))
+    return seen

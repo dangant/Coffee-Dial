@@ -139,12 +139,14 @@ def brew_list(
         db, roaster=roaster, brew_method=brew_method,
         bean_name=bean_name, grind=grind,
     )
+    # At most one first-brew marker per coffee — see brew_service for why.
+    first_brew_ids = brew_service.effective_first_brew_ids(db)
     if request.headers.get("HX-Request"):
         return templates.TemplateResponse("partials/brew_table.html", {
-            "request": request, "brews": brews,
+            "request": request, "brews": brews, "first_brew_ids": first_brew_ids,
         })
     return templates.TemplateResponse("brew_list.html", {
-        "request": request, "brews": brews,
+        "request": request, "brews": brews, "first_brew_ids": first_brew_ids,
         "roaster": roaster or "", "brew_method": brew_method or "",
         "bean_name": bean_name or "", "grind": grind or "",
     })
@@ -269,6 +271,7 @@ def brew_detail(request: Request, brew_id: int, db: Session = Depends(get_db)):
         recs = recommendation_service.get_recommendations(db, brew, brew.rating)
     return templates.TemplateResponse("brew_detail.html", {
         "request": request, "brew": brew, "recommendations": recs,
+        "first_brew_ids": brew_service.effective_first_brew_ids(db),
     })
 
 
