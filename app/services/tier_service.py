@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.models.brew import Brew
 from app.models.template import BrewTemplate
 from app.models.tier_entry import TIER_SCORES, TIERS, TierEntry
+from app.services import bean_service
 
 
 def coffee_key(bean_name: str | None) -> str:
@@ -125,6 +126,10 @@ def place(db: Session, key: str, tier: str | None, position: int = 0) -> TierEnt
         if not candidate:
             return None
         entry = TierEntry(**candidate)
+        # Link the board to the coffee itself, like every other write path — an entry
+        # left unlinked here wouldn't count toward its bean until the next restart.
+        bean = bean_service.get_or_create(db, entry.bean_name, entry.roaster)
+        entry.bean_id = bean.id if bean else None
         db.add(entry)
 
     entry.tier = tier
@@ -152,6 +157,8 @@ def add_manual(db: Session, data: dict) -> TierEntry:
         tier=data.get("tier"),
         source="manual",
     )
+    bean = bean_service.get_or_create(db, entry.bean_name, entry.roaster)
+    entry.bean_id = bean.id if bean else None
     db.add(entry)
     db.commit()
     db.refresh(entry)
@@ -170,6 +177,9 @@ def update_entry(db: Session, entry_id: int, data: dict) -> TierEntry | None:
             setattr(entry, field, data[field])
     if "bean_name" in data and data["bean_name"]:
         entry.coffee_key = coffee_key(data["bean_name"])
+    if "bean_name" in data or "roaster" in data:
+        bean = bean_service.get_or_create(db, entry.bean_name, entry.roaster)
+        entry.bean_id = bean.id if bean else None
     db.commit()
     db.refresh(entry)
     return entry

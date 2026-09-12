@@ -249,3 +249,23 @@ def test_beans_are_relinked_after_restoring_a_backup(client, db):
     bean_id = db.query(Bean).one().id
     assert {b.bean_id for b in db.query(Brew).all()} == {bean_id}
     assert db.query(BeanInventory).one().bean_id == bean_id
+
+
+def test_tier_entries_are_linked_when_placed(client, db):
+    """The board is a fourth surface that records a coffee, and it writes rows itself."""
+    from app.models.tier_entry import TierEntry
+
+    resp = client.post("/api/v1/tiers/entries", json={
+        "bean_name": "Dota", "roaster": "George Howell", "tier": "A",
+    })
+    assert resp.status_code in (200, 201), resp.text
+
+    entry = db.query(TierEntry).one()
+    assert entry.bean_id, "a newly placed coffee should point at its bean immediately"
+    assert db.query(Bean).filter(Bean.id == entry.bean_id).one().name == "Dota"
+
+    # And it follows a rename rather than pointing at the old coffee.
+    before = entry.bean_id
+    client.put(f"/api/v1/tiers/entries/{entry.id}", json={"bean_name": "Dota Lot 3"})
+    db.expire_all()
+    assert db.query(TierEntry).one().bean_id not in (None, before)
