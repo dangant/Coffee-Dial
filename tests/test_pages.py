@@ -82,3 +82,41 @@ def test_brew_list_page_has_bean_and_grind_filters(client):
     assert "Southern Weather" in resp.text
     resp = client.get("/brews?grind=Niche", headers={"HX-Request": "true"})
     assert "Southern Weather" not in resp.text
+
+
+def test_brew_list_shows_the_grind_size_column(client):
+    """The brews table carries the same Size column the dashboard already shows."""
+    client.post("/api/v1/brews/", json={
+        "brew_date": "2025-03-02",
+        "roaster": "Onyx",
+        "bean_name": "El Salvador Santa Rosa",
+        "bean_amount_grams": 25.0,
+        "water_amount_ml": 400.0,
+        "brew_method": "Pour Over",
+        "grind_setting": "22",
+        "grind_suggestion_um": 569,
+    })
+
+    resp = client.get("/brews")
+    assert resp.status_code == 200
+    assert "Size (µm)" in resp.text
+    assert "569µm" in resp.text
+
+    # The HTMX partial is the same table, so the column has to survive there too.
+    partial = client.get("/brews", headers={"HX-Request": "true"})
+    assert "569µm" in partial.text
+
+
+def test_a_brew_without_a_grind_size_shows_a_dash(client):
+    client.post("/api/v1/brews/", json={
+        "brew_date": "2025-03-03",
+        "roaster": "Onyx",
+        "bean_name": "No Size Recorded",
+        "bean_amount_grams": 18.0,
+        "water_amount_ml": 300.0,
+        "brew_method": "Pour Over",
+    })
+
+    resp = client.get("/brews")
+    assert resp.status_code == 200
+    assert "No Size Recorded" in resp.text

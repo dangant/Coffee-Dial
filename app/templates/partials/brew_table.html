@@ -7,6 +7,7 @@
             <th>Bean</th>
             <th>Method</th>
             <th>Grind</th>
+            <th>Size (µm)</th>
             <th>Dose / Water</th>
             {# Flags get their own column: sharing the score cell wrapped E and T onto
                two lines on flagged rows and left the table ragged. #}
@@ -30,6 +31,7 @@
                     <span style="color: var(--text-muted);">—</span>
                 {% endif %}
             </td>
+            <td>{{ brew.grind_suggestion_um ~ 'µm' if brew.grind_suggestion_um else '—' }}</td>
             <td>{{ brew.bean_amount_grams }}g / {{ brew.water_amount_ml }}ml</td>
             <td class="brew-flags">
                 {% if brew.brewed_for_friend %}<span class="badge" title="Brewed for a friend — rating not counted">👥</span>{% endif %}
