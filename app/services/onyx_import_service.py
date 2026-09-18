@@ -6,8 +6,10 @@ with no browser/JS and no API token:
   * ``{url}.js``  — Shopify product JSON: title, vendor (roaster), tags
                      (origin/process), and variants (bag sizes + price in cents).
   * ``{url}``     — HTML: tasting notes (``p.tasting-notes span.note``) and the
-                     espresso / pour-over recipes (``.guide-text`` blocks plus
-                     ``li.kapra.step`` pour steps carrying data-time / data-weight).
+                     espresso / pour-over recipes (``.guide-text`` blocks). Pour steps
+                     are read from the recipe text ("0:30 - Spiral Pour - 150g"); the
+                     older ``li.kapra.step`` data-time / data-weight markup is still
+                     honoured when a page carries it.
 
 This parser is intentionally specific to Onyx's current theme. If they redesign the
 site the selectors below may stop matching; every field is best-effort and returns
@@ -135,10 +137,41 @@ def _num(pattern: str, text: str, group: int = 1, cast=float):
         return None
 
 
+# Onyx's recipe is a run of "0:30 - Spiral Pour - 150g" lines with a trailing
+# "Drain 3:05". It used to be li.kapra.step elements carrying data-time/data-weight;
+# when those disappeared the pour schedule silently came through empty, so the text
+# is now the source of truth and the attributes are only a fallback.
+_STEP_RE = re.compile(
+    r"(\d{1,2}):(\d{2})\s*-\s*([A-Za-z][A-Za-z ]*?)\s*-\s*(\d+)\s*g\b", re.I
+)
+_DRAIN_RE = re.compile(
+    r"drain\s*-?\s*(\d{1,2}):(\d{2})|(\d{1,2}):(\d{2})\s*-\s*drain", re.I
+)
+
+
+def _steps_from_text(text: str) -> list[dict]:
+    """Read the recipe lines of a guide block into the same shape as the old markup."""
+    steps = [
+        {
+            "time_s": int(mm) * 60 + int(ss),
+            "weight_g": int(weight),
+            "action": action.strip(),
+        }
+        for mm, ss, action, weight in _STEP_RE.findall(text)
+    ]
+    drain = _DRAIN_RE.search(text)
+    if drain:
+        mm, ss = (drain.group(1), drain.group(2)) if drain.group(1) else (drain.group(3), drain.group(4))
+        steps.append({"time_s": int(mm) * 60 + int(ss), "weight_g": None, "action": "Drain"})
+    return steps
+
+
 def _parse_pour_over(guide_text: str, steps: list[dict], html: str) -> dict:
     grind = _num(r"grind-size-calculator\?um=(\d+)", html, cast=int)
     if grind is None:
         grind = _num(r"(\d+)\s*[µu]m", guide_text, cast=int)
+    if not steps:
+        steps = _steps_from_text(guide_text)
     device = None
     m = re.search(r"Overview\s+(.+?)\s+Coffee:", guide_text, re.I | re.S)
     if m:
@@ -251,10 +284,10 @@ def parse_onyx(url: str) -> dict:
     for block in soup.select(".guide-text"):
         text = re.sub(r"\s+", " ", block.get_text(" ", strip=True))
         if "Yield" in text and "Water" not in text:
-            espresso = _parse_espresso(text)
+            espresso = espresso or _parse_espresso(text)
         elif "Water" in text or "Grind" in text:
             # Scope grind lookup to this block so a page-wide grind link can't win.
-            pour_over = _parse_pour_over(text, steps, str(block))
+            pour_over = pour_over or _parse_pour_over(text, steps, str(block))
     if steps and not pour_over:
         pour_over = _parse_pour_over("", steps, str(soup))
 
@@ -334,6 +367,12 @@ def _pour_slots(steps: list[dict]) -> dict:
     if len(pours) >= 2:
         out["final_pour_grams"] = pours[-1].get("weight_g")
         out["final_pour_time_seconds"] = pours[-1].get("time_s")
+    # Onyx gives the clock time each pour starts, never how long the bloom ran.
+    # The bloom lasts until the first pour, so the gap between them is its duration.
+    if out.get("bloom_pour_time_seconds") is not None and out.get("first_pour_time_seconds"):
+        duration = out["first_pour_time_seconds"] - out["bloom_pour_time_seconds"]
+        if duration > 0:
+            out["bloom_time_seconds"] = duration
     drain = next((s for s in steps if "drain" in s.get("action", "").lower()), None)
     if drain and drain.get("time_s"):
         out["brew_time_seconds"] = drain["time_s"]

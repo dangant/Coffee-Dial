@@ -400,3 +400,132 @@ def test_real_values_that_merely_look_odd_are_kept():
 
     assert stats["harvest_season"] == "Rotating Microlots"
     assert stats["roast_level"] == "Light Agtron #130"
+
+
+# --- Pour schedule -------------------------------------------------------------
+# Onyx's product page renders the recipe as text inside .guide-text. It used to
+# emit li.kapra.step elements carrying data-time/data-weight; when those went away
+# the pour schedule came through empty and New Brew prefilled nothing.
+
+_PO_GUIDE = """
+<div class="guide-text"><div class="top">
+  <div><p><strong>Overview</strong></p><p>Origami &amp; Kalita Wave 185</p>
+       <p>Coffee: 25g</p><p>Water: 400g @ 205&deg;F</p>
+       <p><strong>Grind</strong><br>569&micro;m</p>
+       <p><a class="grind-calc" href="/pages/grind-size-calculator?um=569">Grind Calculator</a></p></div>
+  <div><p><strong>Recipe</strong></p>
+       <p>0:00 <span class="desktop-only">-</span> <span class="brew-step-action">Bloom - 50g</span><br>
+          0:30 <span class="desktop-only">-</span> <span class="brew-step-action">Spiral Pour - 150g</span><br>
+          1:00 <span class="desktop-only">-</span> <span class="brew-step-action">Center pour - 300g</span><br>
+          1:45 <span class="desktop-only">-</span> <span class="brew-step-action">Spiral pour - 400g</span><br>
+          Drain 3:05<br></p></div>
+</div></div>
+"""
+
+# The same guide Onyx renders again further down the page, localized.
+_PO_GUIDE_ES = """
+<div class="guide-text"><div class="top">
+  <div><p><strong>Resumen</strong></p><p>Origami &amp; Kalita Wave 185</p>
+       <p>Caf&eacute;: 25g</p><p>Agua: 400g @ 96&deg;C</p>
+       <p><strong>Molido</strong><br>569&micro;m</p></div>
+  <div><p><strong>Receta</strong></p>
+       <p>0:00 - Bloom - 90g<br>0:30 - Spiral Pour - 111g<br>Drain 9:09<br></p></div>
+</div></div>
+"""
+
+
+def _guide_text(html):
+    import re
+
+    block = _soup(html).select_one(".guide-text")
+    return re.sub(r"\s+", " ", block.get_text(" ", strip=True)), str(block)
+
+
+def test_recipe_steps_are_read_from_the_text():
+    """The El Salvador Santa Rosa bug: overview parsed, pour schedule empty."""
+    from app.services.onyx_import_service import _parse_pour_over
+
+    text, html = _guide_text(_PO_GUIDE)
+    po = _parse_pour_over(text, [], html)
+
+    assert [(s["time_s"], s["weight_g"], s["action"]) for s in po["steps"]] == [
+        (0, 50, "Bloom"),
+        (30, 150, "Spiral Pour"),
+        (60, 300, "Center pour"),
+        (105, 400, "Spiral pour"),
+        (185, None, "Drain"),
+    ]
+
+
+def test_the_overview_still_parses_alongside_the_steps():
+    from app.services.onyx_import_service import _parse_pour_over
+
+    text, html = _guide_text(_PO_GUIDE)
+    po = _parse_pour_over(text, [], html)
+
+    assert po["coffee_g"] == 25.0
+    assert po["water_g"] == 400.0
+    assert po["temp_f"] == 205.0
+    assert po["grind_um"] == 569
+    assert po["device"] == "Origami & Kalita Wave 185"
+
+
+def test_existing_data_attribute_markup_still_wins():
+    """If Onyx brings the attributes back, they are trusted over the text."""
+    from app.services.onyx_import_service import _parse_pour_over
+
+    text, html = _guide_text(_PO_GUIDE)
+    supplied = [{"time_s": 7, "weight_g": 42, "action": "Bloom"}]
+    po = _parse_pour_over(text, supplied, html)
+
+    assert po["steps"] == supplied
+
+
+def test_every_pour_field_reaches_the_template():
+    """"I want all data populated where possible" - the form's whole pour section."""
+    from app.services.onyx_import_service import _parse_pour_over, _pour_slots
+
+    text, html = _guide_text(_PO_GUIDE)
+    slots = _pour_slots(_parse_pour_over(text, [], html)["steps"])
+
+    assert slots["bloom"] is True
+    assert slots["bloom_water_ml"] == 50.0
+    assert slots["bloom_pour_time_seconds"] == 0
+    # Onyx never states the bloom duration; it runs until the first pour.
+    assert slots["bloom_time_seconds"] == 30
+    assert (slots["first_pour_grams"], slots["first_pour_time_seconds"]) == (150, 30)
+    assert (slots["second_pour_grams"], slots["second_pour_time_seconds"]) == (300, 60)
+    assert (slots["final_pour_grams"], slots["final_pour_time_seconds"]) == (400, 105)
+    assert slots["brew_time_seconds"] == 185
+
+
+def test_the_drain_is_not_treated_as_a_pour():
+    from app.services.onyx_import_service import _parse_pour_over, _pour_slots
+
+    text, html = _guide_text(_PO_GUIDE)
+    slots = _pour_slots(_parse_pour_over(text, [], html)["steps"])
+
+    assert slots["final_pour_grams"] == 400
+
+
+def test_a_localized_duplicate_guide_does_not_overwrite_the_english_one(monkeypatch):
+    """Onyx repeats each guide in Spanish; the first good parse must survive."""
+    from app.services import onyx_import_service as svc
+
+    page = f"<html><body>{_PO_GUIDE}{_PO_GUIDE_ES}</body></html>"
+    monkeypatch.setattr(svc, "_fetch", lambda url: type("R", (), {
+        "text": page, "json": lambda self: {}})())
+
+    po = svc.parse_onyx("https://onyxcoffeelab.com/products/x")["pour_over"]
+
+    assert po["steps"][0]["weight_g"] == 50
+    assert po["temp_f"] == 205.0
+
+
+def test_a_guide_with_no_recipe_yields_no_steps():
+    """A redesign must degrade to empty, not raise."""
+    from app.services.onyx_import_service import _parse_pour_over
+
+    po = _parse_pour_over("Overview Coffee: 25g Water: 400g @ 205F", [], "<div></div>")
+
+    assert po["steps"] == []
