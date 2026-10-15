@@ -133,12 +133,15 @@
 
 <!-- Dialed Recipe / Save as Template -->
 <div class="card">
-    {% if brew.template_id and brew.template %}
+    {% if dial_template %}
     <form method="post" action="/brews/{{ brew.id }}/dial-template" style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
         <div style="flex: 1;">
-            <label style="font-weight: 600;">Update template "{{ brew.template.name }}" with this brew's values</label>
+            <label style="font-weight: 600;">Update template "{{ dial_template.name }}" with this brew's values</label>
+            {% if not brew.template_id %}
+            <small style="display: block; color: var(--text-muted, #888);">This brew isn't linked to a template; this matches it by coffee and method and will link it.</small>
+            {% endif %}
         </div>
-        <button type="submit" class="btn btn-primary" onclick="return confirm('Update template \'{{ brew.template.name }}\' with this brew\'s parameters?')">Dialed Recipe</button>
+        <button type="submit" class="btn btn-primary" onclick="return confirm('Update template \'{{ dial_template.name }}\' with this brew\'s parameters?')">Dialed Recipe</button>
     </form>
     {% endif %}
     <form method="post" action="/brews/{{ brew.id }}/save-template" style="display: flex; gap: 1rem; align-items: end;">

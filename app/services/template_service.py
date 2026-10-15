@@ -53,13 +53,34 @@ def create_template_from_brew(db: Session, brew_id: int, name: str) -> BrewTempl
     return template
 
 
+def template_for_brew(db: Session, brew: Brew) -> BrewTemplate | None:
+    """The template a brew dials in: its own, or the one recipe for its coffee and method.
+
+    A brew logged without picking its template from the dropdown has no link, which
+    hid the Dialed Recipe button even though the coffee plainly had a recipe. Match
+    those by coffee and method — but only when exactly one template fits; with two
+    recipes for the same coffee and method, picking one would be a guess.
+    """
+    if brew.template_id:
+        return brew.template
+    key = bean_key(brew.bean_name, brew.roaster)
+    matches = [
+        tpl for tpl in db.query(BrewTemplate).filter(BrewTemplate.brew_method == brew.brew_method)
+        if (tpl.bean_id == brew.bean_id if tpl.bean_id and brew.bean_id
+            else tpl.bean_name and bean_key(tpl.bean_name, tpl.roaster) == key)
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 def update_template_from_brew(db: Session, brew_id: int) -> BrewTemplate | None:
     brew = db.query(Brew).filter(Brew.id == brew_id).first()
-    if not brew or not brew.template_id:
+    if not brew:
         return None
-    template = db.query(BrewTemplate).filter(BrewTemplate.id == brew.template_id).first()
+    template = template_for_brew(db, brew)
     if not template:
         return None
+    # Dialing an unlinked brew into its coffee's recipe makes it part of that recipe.
+    brew.template_id = template.id
     for field in TEMPLATE_FIELDS:
         value = getattr(brew, field)
         if field in ("bean_name", "roaster"):

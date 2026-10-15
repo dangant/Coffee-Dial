@@ -175,3 +175,55 @@ def test_prefill_without_brews_is_just_the_template(client):
     assert data["name"] == "Fresh"
     assert data["grind_setting"] is None
     assert client.get("/api/v1/templates/9999/prefill").status_code == 404
+
+
+def _monteblanco_template(client, name="JBC Monteblanco", method="Pour Over"):
+    return client.post("/api/v1/templates/", json={
+        "name": name, "roaster": "JBC", "bean_name": "Monteblanco",
+        "brew_method": method, "grind_setting": "2.5.8",
+    }).json()["id"]
+
+
+def _unlinked_brew(client, **extra):
+    return client.post("/api/v1/brews/", json={
+        "brew_date": "2026-10-06", "roaster": "JBC", "bean_name": "Monteblanco ",
+        "brew_method": "Pour Over", "bean_amount_grams": 20.0, "water_amount_ml": 318.0,
+        "grind_setting": "2.5.7", **extra,
+    }).json()["id"]
+
+
+def test_unlinked_brew_dials_its_coffees_only_template(client):
+    """Idea #15: a brew logged without its template still gets the Dialed Recipe button."""
+    tid = _monteblanco_template(client)
+    _monteblanco_template(client, name="JBC Monteblanco Espresso", method="Espresso")
+    bid = _unlinked_brew(client)
+
+    page = client.get(f"/brews/{bid}").text
+    assert "Dialed Recipe</button>" in page
+    assert 'Update template "JBC Monteblanco"' in page
+    assert "isn&#39;t linked to a template" in page or "isn't linked to a template" in page
+
+    client.post(f"/brews/{bid}/dial-template", follow_redirects=False)
+    assert client.get(f"/api/v1/templates/{tid}").json()["grind_setting"] == "2.5.7"
+    assert client.get(f"/api/v1/brews/{bid}").json()["template_id"] == tid
+
+
+def test_ambiguous_match_offers_no_dial(client):
+    a = _monteblanco_template(client, name="Recipe A")
+    _monteblanco_template(client, name="Recipe B")
+    bid = _unlinked_brew(client)
+
+    assert "Dialed Recipe</button>" not in client.get(f"/brews/{bid}").text
+    client.post(f"/brews/{bid}/dial-template", follow_redirects=False)
+    assert client.get(f"/api/v1/templates/{a}").json()["grind_setting"] == "2.5.8"
+    assert client.get(f"/api/v1/brews/{bid}").json()["template_id"] is None
+
+
+def test_linked_brew_dials_its_own_template(client):
+    _monteblanco_template(client, name="Recipe A")
+    b = _monteblanco_template(client, name="Recipe B")
+    bid = _unlinked_brew(client, template_id=b)
+
+    page = client.get(f"/brews/{bid}").text
+    assert 'Update template "Recipe B"' in page
+    assert "linked to a template" not in page

@@ -272,6 +272,7 @@ def brew_detail(request: Request, brew_id: int, db: Session = Depends(get_db)):
     return templates.TemplateResponse("brew_detail.html", {
         "request": request, "brew": brew, "recommendations": recs,
         "first_brew_ids": brew_service.effective_first_brew_ids(db),
+        "dial_template": template_service.template_for_brew(db, brew),
     })
 
 
