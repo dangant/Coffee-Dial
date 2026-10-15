@@ -144,3 +144,34 @@ def test_template_read_exposes_its_bean_id(client):
     template_id = created.json()["id"]
     read = client.get(f"/api/v1/templates/{template_id}").json()
     assert read["bean_id"]
+
+
+def test_prefill_fills_template_gaps_from_last_brew(client):
+    """Dialing in iterates: a new brew picks up where the last one from this template left off."""
+    tid = client.post("/api/v1/templates/", json={
+        "name": "JBC Blueberry", "roaster": "JBC", "bean_name": "Blueberry",
+        "brew_method": "Pour Over", "bean_amount_grams": 20.0, "water_temp_c": 94.0,
+    }).json()["id"]
+    base = {"roaster": "JBC", "bean_name": "Blueberry", "brew_method": "Pour Over",
+            "bean_amount_grams": 20.0, "water_amount_ml": 318.0, "template_id": tid}
+    client.post("/api/v1/brews/", json={**base, "brew_date": "2026-10-01", "grind_setting": "2.5.0"})
+    client.post("/api/v1/brews/", json={
+        **base, "brew_date": "2026-10-06", "grind_setting": "2.5.7",
+        "bean_amount_grams": 18.0, "water_temp_f": 205.0, "notes": "a bit sour",
+    })
+
+    data = client.get(f"/api/v1/templates/{tid}/prefill").json()
+    assert data["grind_setting"] == "2.5.7"       # gap filled from the latest brew
+    assert data["water_amount_ml"] == 318.0
+    assert data["bean_amount_grams"] == 20.0      # the template's own value wins
+    assert data["water_temp_c"] == 94.0
+    assert data["water_temp_f"] is None           # template temp isn't overridden in another unit
+    assert data["notes"] is None                  # one cup's notes aren't the recipe
+
+
+def test_prefill_without_brews_is_just_the_template(client):
+    tid = client.post("/api/v1/templates/", json={"name": "Fresh"}).json()["id"]
+    data = client.get(f"/api/v1/templates/{tid}/prefill").json()
+    assert data["name"] == "Fresh"
+    assert data["grind_setting"] is None
+    assert client.get("/api/v1/templates/9999/prefill").status_code == 404

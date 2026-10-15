@@ -94,6 +94,39 @@ def get_template(db: Session, template_id: int) -> BrewTemplate | None:
     return db.query(BrewTemplate).filter(BrewTemplate.id == template_id).first()
 
 
+# Notes describe how one particular cup went, not the recipe — never carried forward.
+_NOT_CARRIED_FORWARD = {"notes"}
+
+
+def prefill_values(db: Session, template: BrewTemplate, values: dict) -> dict:
+    """Fill the template's blank fields from the latest brew made from it.
+
+    Dialing in is iterative: the next brew starts where the last one left off, so a
+    grind setting worked out at the grinder shouldn't have to be retyped because the
+    template never recorded one. The template still wins wherever it has a value.
+    """
+    last = (
+        db.query(Brew)
+        .filter(Brew.template_id == template.id)
+        .order_by(Brew.brew_date.desc(), Brew.id.desc())
+        .first()
+    )
+    if not last:
+        return values
+    # Water temp is one setting stored in two units; a template's °C must not be
+    # overridden by the last brew's °F, which the form would prefer.
+    has_temp = values.get("water_temp_f") is not None or values.get("water_temp_c") is not None
+    for field in TEMPLATE_FIELDS:
+        if field in _NOT_CARRIED_FORWARD or values.get(field) not in (None, ""):
+            continue
+        if has_temp and field in ("water_temp_f", "water_temp_c"):
+            continue
+        value = getattr(last, field)
+        if value not in (None, ""):
+            values[field] = value
+    return values
+
+
 def list_templates(db: Session) -> list[BrewTemplate]:
     return db.query(BrewTemplate).order_by(BrewTemplate.name).all()
 

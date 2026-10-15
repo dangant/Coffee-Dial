@@ -26,6 +26,16 @@ def get_template(template_id: int, db: Session = Depends(get_db)):
     return template
 
 
+@router.get("/{template_id}/prefill", response_model=TemplateRead)
+def get_template_prefill(template_id: int, db: Session = Depends(get_db)):
+    """The template as the new-brew form should load it: gaps filled from its last brew."""
+    template = template_service.get_template(db, template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    values = TemplateRead.model_validate(template).model_dump()
+    return template_service.prefill_values(db, template, values)
+
+
 @router.put("/{template_id}", response_model=TemplateRead)
 def update_template(template_id: int, data: TemplateUpdate, db: Session = Depends(get_db)):
     template = template_service.update_template(db, template_id, data)

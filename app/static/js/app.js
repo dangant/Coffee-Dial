@@ -59,7 +59,8 @@ async function loadTemplate(selectEl) {
     applyFirstBrewHint(selectEl);
     if (!id) return;
     try {
-        const resp = await fetch(`/api/v1/templates/${id}`);
+        // The template, with anything it leaves blank carried over from its last brew
+        const resp = await fetch(`/api/v1/templates/${id}/prefill`);
         if (!resp.ok) return;
         const data = await resp.json();
         const fieldMap = {
