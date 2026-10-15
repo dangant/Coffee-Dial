@@ -194,9 +194,9 @@ def _unlinked_brew(client, **extra):
 
 def test_unlinked_brew_dials_its_coffees_only_template(client):
     """Idea #15: a brew logged without its template still gets the Dialed Recipe button."""
+    bid = _unlinked_brew(client)  # brewed before the recipe existed, so saved unlinked
     tid = _monteblanco_template(client)
     _monteblanco_template(client, name="JBC Monteblanco Espresso", method="Espresso")
-    bid = _unlinked_brew(client)
 
     page = client.get(f"/brews/{bid}").text
     assert "Dialed Recipe</button>" in page
@@ -227,3 +227,24 @@ def test_linked_brew_dials_its_own_template(client):
     page = client.get(f"/brews/{bid}").text
     assert 'Update template "Recipe B"' in page
     assert "linked to a template" not in page
+
+
+def test_brew_saved_without_template_links_to_its_coffees_recipe(client):
+    tid = _monteblanco_template(client)
+    _monteblanco_template(client, name="JBC Monteblanco Espresso", method="Espresso")
+    bid = _unlinked_brew(client)
+    assert client.get(f"/api/v1/brews/{bid}").json()["template_id"] == tid
+
+
+def test_brew_with_ambiguous_recipe_stays_unlinked(client):
+    _monteblanco_template(client, name="Recipe A")
+    _monteblanco_template(client, name="Recipe B")
+    bid = _unlinked_brew(client)
+    assert client.get(f"/api/v1/brews/{bid}").json()["template_id"] is None
+
+
+def test_editing_an_unlinked_brew_links_it(client):
+    bid = _unlinked_brew(client)
+    tid = _monteblanco_template(client)
+    client.put(f"/api/v1/brews/{bid}", json={"grind_setting": "2.5.6"})
+    assert client.get(f"/api/v1/brews/{bid}").json()["template_id"] == tid

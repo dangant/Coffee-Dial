@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.brew import Brew
 from app.models.rating import Rating
 from app.schemas.brew import BrewCreate, BrewUpdate
-from app.services import bean_service
+from app.services import bean_service, template_service
 from app.services.naming import bean_key
 
 
@@ -27,6 +27,7 @@ def create_brew(db: Session, data: BrewCreate) -> Brew:
     # itself rather than only to the spelling typed on the day.
     bean = bean_service.get_or_create(db, values.get("bean_name"), values.get("roaster"))
     brew.bean_id = bean.id if bean else None
+    _link_template(db, brew)
     db.add(brew)
     db.commit()
     db.refresh(brew)
@@ -93,9 +94,24 @@ def update_brew(db: Session, brew_id: int, data: BrewUpdate) -> Brew | None:
     if "bean_name" in updates or "roaster" in updates:
         bean = bean_service.get_or_create(db, brew.bean_name, brew.roaster)
         brew.bean_id = bean.id if bean else None
+    _link_template(db, brew)
     db.commit()
     db.refresh(brew)
     return brew
+
+
+def _link_template(db: Session, brew: Brew) -> None:
+    """Link a brew saved without a template to its coffee's one recipe.
+
+    Forgetting the template dropdown used to cost the brew its Dialed Recipe button,
+    its place in the template's history, and its use as the starting point for the
+    next brew. Only an unambiguous match is linked — see template_for_brew.
+    """
+    if brew.template_id:
+        return
+    template = template_service.template_for_brew(db, brew)
+    if template:
+        brew.template_id = template.id
 
 
 def delete_brew(db: Session, brew_id: int) -> bool:
